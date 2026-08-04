@@ -1,0 +1,10 @@
+Upgrade to 4.28.1 from the 4.x line.
+Pin to 4.2.x or take whatever v2.14.x ships.
+The constraint ^4.0 allows minor bumps.
+Release 1.2.3 followed 1.0.0 after a long gap.
+Tag v2.0.0 shipped alongside 1.0.0-rc.1 and 1.0.0+build.27.
+Version 10.20.30 keeps its numerals.
+The value 4.0 is a decimal and 3.14 is pi.
+See section 1.2 and Python 3.11 stay as prose.
+Read lines 30-45 of the config.
+Steps 1-3 must run in order.

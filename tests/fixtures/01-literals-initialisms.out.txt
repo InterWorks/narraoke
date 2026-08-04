@@ -1,0 +1,5 @@
+Send [JSON](/ʤˈeɪsˌɑn/) and [YAML](/jˈæmᵊl/).
+The Sha is recorded in the lock file.
+Check the to do and fix me markers.
+Run U.V.X. to try it without installing.
+An [Invalid](/ɪnvˈælɪd/) [JSON](/ʤˈeɪsˌɑn/) payload was rejected.

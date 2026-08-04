@@ -1,0 +1,5 @@
+Pass a custom_id with every request.
+The customer_id and order_id are both required.
+Store the session_id in a cookie.
+A tenant_id and a correlation_id get the same treatment.
+Leave _id and some_idea and identity alone.

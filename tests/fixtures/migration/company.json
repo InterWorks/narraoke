@@ -1,0 +1,51 @@
+// MIGRATION WITNESS — redacted. See docs/rule-triage.md.
+// The five tier-3a rules are REPLACED BY PLACEHOLDERS here: this file
+// lives in a public repo. The placeholders preserve the *shape* of the
+// migration (same count, same tiers, same ordering) without the content.
+{
+  "named_pronunciations": [
+    {
+      "name": "Redactedco",
+      "ipa": "/ɹɪˈdæktɪdkoʊ/",
+      "hint": "Redacted-co",
+      "why": "redacted: company name"
+    }
+  ],
+  "literal": [
+    {
+      "from": "REDACTED_TOKEN_NAME",
+      "to": "redacted_token_name",
+      "why": "redacted: credential identifier"
+    },
+    {
+      "from": "#redacted-channel-a",
+      "to": "R.C. channel A",
+      "why": "redacted: internal channel"
+    },
+    {
+      "from": "redacted-contact@",
+      "to": "redacted contact at",
+      "why": "redacted: internal contact"
+    },
+    {
+      "from": "#redacted-channel-b",
+      "to": "R.C. channel B",
+      "why": "redacted: internal channel"
+    },
+    {
+      "from": "Redacted Product",
+      "to": "R.P. Product",
+      "why": "redacted: internal product"
+    },
+    {
+      "from": "CVE",
+      "to": "common vulnerabilities and exposures",
+      "why": "Spell out the initialism for a lay audience."
+    },
+    {
+      "from": "2FA",
+      "to": "two-factor authentication",
+      "why": "Speak the initialism in full as 'two-factor authentication' everywhere it stands alone."
+    }
+  ]
+}

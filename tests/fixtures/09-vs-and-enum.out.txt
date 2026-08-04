@@ -1,0 +1,4 @@
+Compare batch versus streaming modes.
+It is local versus remote, not one versus the other.
+The [enum](/ˈinʌm/) value must be one of three options.
+A [transient](/tɹˈænziənt/) failure should be retried.

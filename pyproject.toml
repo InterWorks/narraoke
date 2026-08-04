@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "narraoke"
+version = "0.1.0"
+description = "Turn a structured markdown document into a narrated, teleprompter-style scrolling video — karaoke for your docs"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "interworks-morr" }]
+
+# No license is declared, and no LICENSE file ships with this repository.
+# Absent an explicit grant, default copyright applies: all rights reserved.
+# Do not add an SPDX identifier or a LICENSE file without a deliberate
+# decision — either one is a machine-readable grant to redistribute.
+
+dependencies = [
+    "kokoro>=0.9.0",
+    "soundfile>=0.12.1",
+    "pydub>=0.25.1",
+    "Pillow>=10.0.0",
+    "torch>=2.3.0",
+    # Imported directly (html_to_video.py, tts_engine.py) but previously
+    # undeclared — both resolved transitively by luck. Declared explicitly so
+    # an upstream change cannot drop them silently.
+    "numpy>=1.24",
+    "huggingface_hub>=0.23",
+]
+
+[project.optional-dependencies]
+# The superseded URL->video path (article_to_video.py, extractor.py,
+# video_gen.py) is the only consumer of these. Verified: zero references in
+# html_to_video.py, the live tool.
+legacy = [
+    "trafilatura>=1.12.0",
+    "newspaper3k>=0.2.8",
+    "lxml>=5.0.0",
+    "lxml_html_clean",
+    "ffmpeg-python>=0.2.0",
+    "moviepy>=2.0.0",
+]
+
+[dependency-groups]
+# Dev-only; not part of the installed package.
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+narraoke = "html_to_video:main"
+
+[tool.setuptools]
+# Mostly a flat single-module layout — these are modules, not a package. The
+# original `packages.find` matched an `article_to_video*` package directory
+# that does not exist, so no .py file was actually packaged and the installed
+# console script would have failed on import.
+py-modules = [
+    "html_to_video",
+    "tts_engine",
+    "timing",
+    "utils",
+    "article_to_video",
+    "extractor",
+    "video_gen",
+]
+# The tier-4 rules ARE a package. Listing it explicitly rather than using
+# auto-discovery, which would try to interpret the flat modules above as
+# packages too and fail.
+packages = ["rules"]
+
+# ── Supply-chain hardening ───────────────────────────────────────────────────
+# `exclude-newer` was removed deliberately. Renovate cannot update that date,
+# so leaving it pinned makes every Renovate PR propose a version uv then
+# refuses to lock — breaking every PR rather than just going stale. The
+# cooldown now lives in renovate.json via the org preset's `minimumReleaseAge`,
+# which holds young releases back at the PR level (where the supply-chain
+# decision belongs) while `uv lock` always succeeds.
+# See: https://docs.astral.sh/uv/guides/integration/renovate/
+
+# PyTorch CUDA 12.4 wheels. `explicit = true` means only packages listed in
+# [tool.uv.sources] resolve through this index; everything else stays on PyPI.
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

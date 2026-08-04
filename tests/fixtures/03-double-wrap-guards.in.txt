@@ -1,0 +1,3 @@
+A retryable error is retryable even when retryability is documented.
+The delegates delegate work to other delegates.
+An isRetryable flag and an isError flag are both booleans.

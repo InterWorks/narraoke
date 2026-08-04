@@ -1,0 +1,5 @@
+Set KEY=value in the environment.
+Think about past-you, present-you, and future-you.
+The account was hijacked last week.
+Check the README and follow SemVer.
+Without the company tier, TTL and XSS stay unexpanded.

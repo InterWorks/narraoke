@@ -1,0 +1,6 @@
+Copy dot E N V into place and update dot git ignore.
+Paths like /foo dot env and compounds like .envrc stay untouched.
+The file config dot yaml sits beside settings dot json.
+Edit home dot claude dot json before touching dot claude dot json or dot mcp dot json.
+Hidden configs like dot eslintrc dot json and dot prettierrc dot json narrate too.
+Bare dotfiles such as .npmrc and .editorconfig are left alone.

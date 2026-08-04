@@ -1,0 +1,10 @@
+Upgrade to four dot 28 dot 1 from the four dot x line.
+Pin to four dot 2 dot x or take whatever version two dot 14 dot x ships.
+The constraint ^4.0 allows minor bumps.
+Release one dot 2 dot 3 followed one dot 0 dot 0 after a long gap.
+Tag version two dot 0 dot 0 shipped alongside one dot 0 dot 0 R.C. one and one dot 0 dot 0 plus build 27.
+Version 10 dot 20 dot 30 keeps its numerals.
+The value 4.0 is a decimal and 3.14 is pi.
+See section 1.2 and Python 3.11 stay as prose.
+Read lines 30 to 45 of the config.
+Steps 1 to 3 must run in order.

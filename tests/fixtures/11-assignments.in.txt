@@ -1,0 +1,7 @@
+Set KEY=value in the environment.
+Export CLAUDE_HEADLESS=true before running the batch.
+Pass --voice=af_heart to override the default.
+Use DEBUG=true and LOG_LEVEL=info together.
+Point CONFIG=app.yaml at the staging file.
+Operators stay untouched: a==b, x!=y, i<=10, n>=3, counter+=1.
+A spaced a = b reads fine as prose.

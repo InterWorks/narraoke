@@ -1,0 +1,3 @@
+A [retryable](/ɹitɹˈaɪəbəl/) error is [retryable](/ɹitɹˈaɪəbəl/) even when [retryability](/ɹitɹˌaɪəbˈɪlɪti/) is documented.
+The [delegates](/dˈɛləɡˌeɪts/) delegate work to other [delegates](/dˈɛləɡˌeɪts/).
+An isRetryable flag and an isError flag are both booleans.

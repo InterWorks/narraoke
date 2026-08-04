@@ -1,0 +1,3 @@
+The setting, "read lines 30 to 45", spans a range inside a quote.
+A parenthetical, (this part is an aside) gets emphasis.
+He said, "hello there", and then left.

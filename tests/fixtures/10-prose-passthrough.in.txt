@@ -1,0 +1,3 @@
+This paragraph contains no special rules at all.
+It should pass through the pipeline completely unchanged.
+Plain sentences are the common case in any document.

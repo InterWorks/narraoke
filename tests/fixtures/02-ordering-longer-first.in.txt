@@ -1,0 +1,3 @@
+Edit ~/.claude.json before touching .claude.json or .mcp.json.
+Retryability differs from retryable, and retriability is a variant spelling.
+An Invalid JSON body is not the same as plain JSON.

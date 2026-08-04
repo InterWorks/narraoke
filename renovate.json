@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>InterWorks/renovate-config"],
+  "packageRules": [
+    {
+      "description": "torch resolves through the pinned pytorch-cu124 index, not PyPI. A CUDA-variant bump can silently drop GPU TTS to the CPU path, which is ~160x slower (a 2-minute stage becomes ~5 hours) and raises no error. No test catches this: the suite exercises rewrite_for_tts, a pure string function that never touches torch. Requires explicit approval from the dependency dashboard.",
+      "matchPackageNames": ["torch"],
+      "dependencyDashboardApproval": true
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true
+  }
+}

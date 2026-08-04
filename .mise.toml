@@ -1,0 +1,49 @@
+# Toolchain pinning. mise owns the *toolchain*; uv keeps owning *Python
+# dependencies* — uv.lock is the supply-chain control and stays authoritative.
+# Do not let mise manage Python packages.
+
+[tools]
+uv = "0.9.21"
+python = "3.10"
+
+[env]
+# Prefer a real Chromium binary. `_chromium_bin` probes `chromium-browser`
+# first, which on Ubuntu/WSL is usually a snap shim: on the reference box
+# /usr/bin/chromium-browser is a 2.4KB shell script and /snap/bin/chromium
+# symlinks to /usr/bin/snap. Snap confinement blocks reads outside $HOME, so
+# rendering a markdown file from a path elsewhere fails in ways that look
+# like a Chromium bug rather than a sandboxing one.
+#
+# Renders from under $HOME work fine, which is why this is commented out by
+# default. Uncomment if you hit unexplained capture failures. The real binary
+# lives inside the snap:
+# NARRAOKE_CHROMIUM = "/snap/chromium/current/usr/lib/chromium-browser/chrome"
+
+[tasks.render]
+description = "Render a markdown document to video"
+run = "uv run python html_to_video.py"
+
+[tasks.test]
+description = "Run the golden-file rule tests (sub-second; no render)"
+run = "uv run python -m pytest tests/ -q"
+
+[tasks.leak-scan]
+description = "Raw-bytes denylist scan over tracked files"
+run = "uv run python scripts/leak_scan.py"
+
+# ── External prerequisites mise does not manage ──────────────────────────────
+# ffmpeg     — system-managed on purpose. mise offers 8.x via conda-forge,
+#              which has historically shipped WITHOUT NVENC. If h264_nvenc is
+#              missing, has_nvenc() silently falls back to libx264: no error,
+#              just a slower encode nobody notices. Before ever adopting a
+#              mise-provided ffmpeg, this must show BOTH:
+#                  ffmpeg -encoders | grep -E 'h264_nvenc|libx264'
+#              Verified on the reference box: system ffmpeg 4.4.2 has both.
+# chromium   — not in the mise registry. Install via system package manager.
+#              (The registry's `chromedriver` is for Selenium and is NOT a
+#              substitute; this tool shells out to a Chromium binary for
+#              --headless=new screenshots.)
+# espeak-ng  — not in the mise registry. Required by Kokoro on some systems.
+# fonts      — fonts-dejavu-core. _find_font falls back to a tiny bitmap font
+#              rather than crashing, so missing fonts degrade title cards
+#              silently rather than loudly.

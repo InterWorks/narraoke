@@ -1,0 +1,38 @@
+# ── Never commit: bulk artifacts ─────────────────────────────────────────────
+# output/ also holds full narration transcripts (.srt), so excluding it is a
+# confidentiality control, not just hygiene.
+output/
+.venv/
+.venv-win/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# ── Rule data files: defensive ───────────────────────────────────────────────
+# Tiers 1-3 live outside this repo by construction. These patterns make an
+# accidental `git add` of rule data a non-event rather than a leak.
+*.tts-overrides.json
+rules.d/
+config.json
+
+# Exception: the migration-witness fixtures. These are REDACTED test data —
+# the five tier-3a rules are placeholders — and the migration-equivalence test
+# cannot run without them. Verified leak-scan clean.
+!tests/fixtures/migration/*.tts-overrides.json
+
+# ── Working files ────────────────────────────────────────────────────────────
+# A working plan, not a deliverable — it goes stale the moment step 1 lands.
+docs/PLAN.md
+run-*.log
+
+# ── Media + local debris ─────────────────────────────────────────────────────
+*.mp4
+*.mp3
+*.wav
+*.swp
+*:Zone.Identifier
+input/
+tts_sources/

@@ -1,0 +1,6 @@
+Copy .env into place and update .gitignore.
+Paths like /foo.env and compounds like .envrc stay untouched.
+The file config.yaml sits beside settings.json.
+Edit ~/.claude.json before touching .claude.json or .mcp.json.
+Hidden configs like .eslintrc.json and .prettierrc.json narrate too.
+Bare dotfiles such as .npmrc and .editorconfig are left alone.

@@ -1,0 +1,7 @@
+Set KEY equals value in the environment.
+Export CLAUDE_HEADLESS equals true before running the batch.
+Pass --voice equals af_heart to override the default.
+Use DEBUG equals true and LOG_LEVEL equals info together.
+Point CONFIG equals app dot yaml at the staging file.
+Operators stay untouched: a==b, x!=y, i<=10, n>=3, counter+=1.
+A spaced a = b reads fine as prose.

@@ -1,0 +1,5 @@
+Send JSON and YAML.
+The SHA is recorded in the lockfile.
+Check the TODO and FIXME markers.
+Run uvx to try it without installing.
+An Invalid JSON payload was rejected.

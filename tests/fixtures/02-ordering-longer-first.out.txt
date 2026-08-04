@@ -1,0 +1,3 @@
+Edit home dot claude dot json before touching dot claude dot json or dot mcp dot json.
+[Retryability](/ɹitɹˌaɪəbˈɪlɪti/) differs from [retryable](/ɹitɹˈaɪəbəl/), and [retriability](/ɹitɹˌaɪəbˈɪlɪti/) is a variant spelling.
+An [Invalid](/ɪnvˈælɪd/) [JSON](/ʤˈeɪsˌɑn/) body is not the same as plain [JSON](/ʤˈeɪsˌɑn/).
