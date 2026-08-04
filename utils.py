@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -14,16 +15,90 @@ def info(msg: str) -> None:
     print(f"[INFO]  {msg}", flush=True)
 
 
+# Every warning raised during a run, in order, so the end-of-run summary can
+# repeat them. A real defect — "Coord count doesn't match phrase count" — was
+# otherwise buried mid-log at the same visual weight as routine chatter, in a
+# run that prints hundreds of lines over ~16 minutes.
+_WARNINGS: list[str] = []
+
+
 def warn(msg: str) -> None:
+    _WARNINGS.append(msg.strip())
     print(f"[WARN]  {msg}", flush=True)
+
+
+def collected_warnings() -> list[str]:
+    """Every warning so far, in the order they were raised."""
+    return list(_WARNINGS)
+
+
+def reset_warnings() -> None:
+    """Clear the warning log. Used by tests; a run collects from a clean start."""
+    _WARNINGS.clear()
 
 
 def error(msg: str) -> None:
     print(f"[ERROR] {msg}", file=sys.stderr, flush=True)
 
 
+# Stage timings, in completion order: (label, seconds).
+_STAGE_TIMINGS: list[tuple[str, float]] = []
+_stage_started_at: float | None = None
+_stage_label: str = ""
+
+
+def _format_duration(seconds: float) -> str:
+    """Human-scaled duration: 8.4s, 2m 13s, 1h 04m."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(int(round(seconds)), 60)
+    if minutes < 60:
+        return f"{minutes}m {secs:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
+
+
 def step(msg: str) -> None:
+    """Announce a stage, closing out the previous one with its elapsed time.
+
+    The two slowest stages — TTS and encoding — had the least granularity, so
+    a long silence was indistinguishable from a hang. Printing the previous
+    stage's duration as the next one starts gives a running sense of pace
+    without needing progress bars inside ffmpeg.
+    """
+    global _stage_started_at, _stage_label
+    now = time.monotonic()
+    if _stage_started_at is not None and _stage_label:
+        elapsed = now - _stage_started_at
+        _STAGE_TIMINGS.append((_stage_label, elapsed))
+        print(f"    ({_format_duration(elapsed)})", flush=True)
+    _stage_started_at = now
+    _stage_label = msg.rstrip(" …")
     print(f"\n>>> {msg}", flush=True)
+
+
+def finish_stages() -> None:
+    """Close the final stage so its timing is recorded."""
+    global _stage_started_at, _stage_label
+    if _stage_started_at is not None and _stage_label:
+        elapsed = time.monotonic() - _stage_started_at
+        _STAGE_TIMINGS.append((_stage_label, elapsed))
+        print(f"    ({_format_duration(elapsed)})", flush=True)
+    _stage_started_at = None
+    _stage_label = ""
+
+
+def stage_timings() -> list[tuple[str, float]]:
+    """Completed stage timings, slowest-last in completion order."""
+    return list(_STAGE_TIMINGS)
+
+
+def reset_stage_timings() -> None:
+    """Clear recorded timings. Used by tests."""
+    global _stage_started_at, _stage_label
+    _STAGE_TIMINGS.clear()
+    _stage_started_at = None
+    _stage_label = ""
 
 
 # ── Text helpers ─────────────────────────────────────────────────────────────

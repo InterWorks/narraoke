@@ -61,13 +61,17 @@ from rules.stack import (
     RuleStack,
 )
 from utils import (
+    _format_duration,
     check_ffmpeg,
     chunk_sentences,
+    collected_warnings,
+    finish_stages,
     has_nvenc,
     info,
     slugify,
     split_phrases,
     split_sentences,
+    stage_timings,
     step,
     warn,
 )
@@ -3859,9 +3863,11 @@ def main() -> None:
         )
 
     # ── Summary ───────────────────────────────────────────────────────────────
+    finish_stages()
     print("\n" + "=" * 60)
     print("DONE")
     print("=" * 60)
+
     for label, path in [
         ("HTML", html_path),
         ("Audio (MP3)", audio_path),
@@ -3884,6 +3890,26 @@ def main() -> None:
     _update_latest_symlink(base_output_dir, slug, output_dir)
     print(f"\nVersion: {output_dir}")
     print(f"Latest:  {base_output_dir / slug / 'latest'}")
+
+    timings = stage_timings()
+    if timings:
+        total = sum(seconds for _, seconds in timings)
+        print(f"\nTime: {_format_duration(total)} total")
+        # Slowest first: on a ~16 minute run the interesting question is
+        # always "what dominated?".
+        for label, seconds in sorted(timings, key=lambda t: -t[1])[:6]:
+            share = (seconds / total * 100) if total else 0
+            print(f"  {_format_duration(seconds):>8}  {share:4.0f}%  {label}")
+
+    # Warnings land last, after the paths, so they are the final thing on
+    # screen. A real defect would otherwise be buried mid-log among hundreds
+    # of routine lines in a ~16 minute run.
+    warnings = collected_warnings()
+    if warnings:
+        print(f"\n{len(warnings)} warning(s) during this run:")
+        for message in warnings:
+            print(f"  ! {message}")
+
     print("=" * 60)
 
     if args.preview:

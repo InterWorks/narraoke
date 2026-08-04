@@ -121,6 +121,20 @@ Sections are independent and render concurrently by default. On the reference
 document this is the largest single cost in a run, so `--section-workers`
 is where the wall-clock time goes if you want to tune it.
 
+Every stage reports its elapsed time as the next one begins, and the run ends
+with a breakdown of where the time went plus any warnings raised — so a real
+defect is the last thing on screen rather than buried mid-log:
+
+```
+Time: 16m 02s total
+    6m 52s    43%  Rendering 11 per-section MP4(s)
+    6m 09s    38%  Encoding video
+    1m 53s    12%  Synthesising audio
+
+1 warning(s) during this run:
+  ! Coord count (1044) doesn't match phrase count (1071). Highlight alignment may drift.
+```
+
 Each run writes to a fresh timestamped version directory under
 `output/<slug>/`, so prior renders are never overwritten.
 
