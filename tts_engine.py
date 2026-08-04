@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import random
+import shutil
 import wave
 from pathlib import Path
 
@@ -166,6 +167,74 @@ def _kokoro_available() -> bool:
         return False
 
 
+# espeak-ng stores its data path in a fixed 160-byte buffer (`N_PATH_HOME`).
+# A longer path is silently truncated by snprintf, fails the directory check
+# that follows, and the lookup falls all the way through to the compiled-in
+# build default — a GitHub Actions runner path baked into the wheel. The user
+# sees a missing-file error naming a directory that never existed on their
+# machine, with nothing pointing at path length as the cause.
+#
+# Measured on espeakng-loader 0.2.4: a 159-character data path initialises
+# fine, 160 fails. See docs and the upstream reports for detail.
+_ESPEAK_PATH_LIMIT = 160
+
+
+def _espeak_data_path_is_too_long() -> tuple[bool, str]:
+    """Whether the packaged espeak data path exceeds what espeak-ng can hold."""
+    try:
+        import espeakng_loader
+    except ImportError:
+        return False, ""
+    path = str(espeakng_loader.get_data_path())
+    return len(path) >= _ESPEAK_PATH_LIMIT, path
+
+
+def _shim_espeak_data_path() -> None:
+    """Copy espeak's data somewhere short enough for it to actually load.
+
+    Only runs when the packaged path is over the limit, so the common case
+    pays nothing. The copy lives under the user's cache directory, costs
+    ~12MB, and is reused on later runs.
+
+    **A copy, not a symlink.** phonemizer resolves the path it is given, so a
+    symlink expands straight back to the long original and the truncation
+    happens anyway.
+    """
+    too_long, original = _espeak_data_path_is_too_long()
+    if not too_long:
+        return
+
+    cache_root = Path(
+        os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache")
+    ) / "narraoke" / "espeak"
+    target = cache_root / "espeak-ng-data"
+
+    if len(str(target)) >= _ESPEAK_PATH_LIMIT:
+        # Nothing we can do from here; say so rather than failing obscurely.
+        warn(
+            f"  espeak data path is {len(original)} chars, over the "
+            f"{_ESPEAK_PATH_LIMIT}-char limit espeak-ng can hold, and the "
+            f"cache location is no shorter. Synthesis will likely fail with "
+            f"a missing-file error naming a path that does not exist. "
+            f"Move the project to a shorter path."
+        )
+        return
+
+    if not (target / "phontab").is_file():
+        info(f"  espeak data path is {len(original)} chars; copying to a "
+             f"shorter path so espeak-ng can load it")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(original, target, dirs_exist_ok=True)
+
+    # Must land after `import misaki.espeak`, which calls set_data_path at
+    # import time — otherwise that import overwrites this with the long path.
+    try:
+        from phonemizer.backend.espeak.wrapper import EspeakWrapper
+        EspeakWrapper.set_data_path(str(target))
+    except Exception as e:  # pragma: no cover - depends on optional stack
+        warn(f"  could not redirect espeak data path: {e}")
+
+
 def _synthesise_kokoro(
     chunks: list[str],
     voice: str,
@@ -176,6 +245,10 @@ def _synthesise_kokoro(
     import numpy as np
     import soundfile as sf
     from kokoro import KPipeline
+
+    # After kokoro's imports (which pull in misaki.espeak and set the long
+    # path), before any pipeline is built.
+    _shim_espeak_data_path()
 
     step("Initialising Kokoro TTS …")
     import torch

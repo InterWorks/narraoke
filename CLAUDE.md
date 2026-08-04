@@ -157,6 +157,29 @@ without NVENC falls back to libx264 silently.
 `_find_font` falls back to a tiny bitmap font rather than crashing, so missing
 fonts degrade title cards **silently**.
 
+## Two failures that blame the wrong thing
+
+Both were found by cloning the repo fresh and rendering, which is worth doing
+occasionally — neither shows up in the tests.
+
+**Chromium cannot read outside `$HOME` when it is a snap build.** Rendering
+from `/tmp` or a scratch mount fails; snap confinement denies the read and
+Chromium reports `ERR_FILE_NOT_FOUND` for a file that plainly exists.
+`_diagnose_dom_failure` now says so, names the binary in use, and suggests
+rendering under `$HOME`. `$NARRAOKE_CHROMIUM` points at a different binary,
+but a snap's own executable cannot be invoked directly.
+
+**espeak-ng truncates a data path over 160 characters.** It stores the path
+in a fixed buffer, silently truncates, then falls through to a compiled-in
+build default — a GitHub Actions runner path baked into the wheel. The error
+names a directory that never existed on the machine, with nothing pointing at
+path length. `_shim_espeak_data_path` copies the data under `~/.cache` when
+the packaged path is too long. **Copy, not symlink**: phonemizer resolves the
+path it is given, so a symlink expands back to the long original.
+
+Measured boundary on espeakng-loader 0.2.4: 159 characters initialises, 160
+fails. A deep clone path is enough to trigger it.
+
 ---
 
 A working plan may exist at `docs/PLAN.md`. It is untracked and may be absent.
