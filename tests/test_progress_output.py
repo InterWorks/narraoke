@@ -2,9 +2,8 @@
 
 A run prints hundreds of lines over ~16 minutes. Two problems followed from
 that: the slowest stages had the least granularity, so a long silence looked
-like a hang; and a real defect — "Coord count doesn't match phrase count",
-27 misaligned phrases — sat mid-log at the same visual weight as routine
-chatter.
+like a hang; and warnings sat mid-log at the same visual weight as routine
+chatter, so anything genuinely wrong was easy to miss.
 """
 from __future__ import annotations
 
@@ -110,11 +109,14 @@ def test_warnings_are_still_printed_when_raised(capsys) -> None:
     assert "visible now" in capsys.readouterr().out
 
 
-def test_the_real_alignment_defect_survives_to_the_summary() -> None:
-    """The warning this whole feature exists for.
+def test_a_warning_survives_a_wall_of_routine_output() -> None:
+    """A warning must still be findable after hundreds of INFO lines.
 
-    27 phrases whose highlight is misaligned — a genuine quality defect that
-    was previously indistinguishable from routine output.
+    The example text is the old coord-count warning, kept because it is
+    realistic in shape and length. That particular warning turned out to be
+    a false alarm and has since been replaced — see
+    `tests/test_phrase_coverage.py` — but the plumbing tested here is what
+    makes any genuine warning visible at the end of a ~16 minute run.
     """
     utils.warn(
         "Coord count (1044) doesn't match phrase count (1071). "

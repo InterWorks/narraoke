@@ -157,6 +157,29 @@ without NVENC falls back to libx264 silently.
 `_find_font` falls back to a tiny bitmap font rather than crashing, so missing
 fonts degrade title cards **silently**.
 
+## Summaries are narrated without a highlight, by design
+
+A code block or table is not read out cell by cell. A summary paragraph is
+narrated instead ("Columns: Type, Use it for."), and while it plays the camera
+dwells on or scrolls the actual element. Those summary phrases therefore have
+**no `narr` span of their own** — `render_video_html` skips them and
+`build_keyframes` anchors them to the following code/table block.
+
+So a document with tables legitimately has fewer spans than phrases. The
+onboarding document has 1071 phrases and 1044 spans; another has 3219 and
+2895. Nothing is missing in either.
+
+This tripped up two investigations, because the old check compared span count
+against phrase count and warned on every render of any document containing a
+table. `_check_phrase_coverage` now asserts what actually matters: every
+phrase resolves to a span **or** a visual anchor. A phrase resolving to
+neither stalls the highlight and is a genuine defect.
+
+The unenforced invariant to watch: a summary block anchors to the *next*
+code/table block, and the pairing resets on any other intervening block. A
+summary emitted without its visual immediately following would orphan its
+phrases — which is exactly what the new check catches.
+
 ## Two failures that blame the wrong thing
 
 Both were found by cloning the repo fresh and rendering, which is worth doing

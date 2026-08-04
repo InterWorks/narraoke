@@ -2137,6 +2137,64 @@ CHROMIUM_SCREENSHOT_SLICE_H = 8000
 CHROMIUM_SCREENSHOT_SLICE_FLEX = 1500
 
 
+def _check_phrase_coverage(
+    phrases: list[str],
+    annotated_blocks: list[dict],
+    coords: list[dict],
+) -> list[str]:
+    """Warn only about phrases that will genuinely have nowhere to point.
+
+    This replaces a comparison of `len(coords)` against `len(phrases)`, which
+    warned on every render of any document containing a table or a code block.
+    Those two numbers were never meant to be equal.
+
+    Code-block and table summaries are narrated but **deliberately have no
+    span of their own** — `render_video_html` skips them, and `build_keyframes`
+    points the camera at the *following* code/table element instead, so the
+    reader sees the thing being described rather than a highlight on prose
+    that is not on screen. Every such phrase is accounted for; none is
+    dropped.
+
+    What actually matters is that each phrase resolves to *something*: its own
+    span, or a visual element it is paired with. A phrase that resolves to
+    neither is a real defect — `build_keyframes` skips it and the karaoke
+    highlight stalls. That is what this checks.
+    """
+    have_span = {
+        int(entry["id"].split("-")[1])
+        for entry in coords
+        if isinstance(entry.get("id"), str) and "-" in entry["id"]
+    }
+
+    # Mirror build_keyframes' pairing: a summary block's phrases anchor to the
+    # next code/table block. The pairing resets on any other intervening
+    # block, so a summary without its visual is exactly the orphan case.
+    anchored: set[int] = set()
+    pending: list[int] = []
+    for block in annotated_blocks:
+        if block.get("tts_summary_for_code") or block.get("tts_summary_for_table"):
+            pending.extend(block.get("phrase_indices", []))
+            continue
+        if pending and block.get("kind") in ("code", "table"):
+            anchored.update(pending)
+        pending = []
+
+    orphans = [
+        i for i in range(len(phrases))
+        if i not in have_span and i not in anchored
+    ]
+    if not orphans:
+        return []
+
+    shown = ", ".join(str(i) for i in orphans[:8])
+    if len(orphans) > 8:
+        shown += f", … ({len(orphans)} total)"
+    return [
+        f"{len(orphans)} phrase(s) have neither a span nor a visual anchor, so "
+        f"the highlight will stall on them: {shown}"
+    ]
+
+
 def _diagnose_dom_failure(dom: str, html_path: Path, chromium: str) -> str:
     """Explain why a DOM dump has no coordinates, as specifically as possible.
 
@@ -3839,11 +3897,8 @@ def main() -> None:
 
     # ── 3. Capture screenshot + phrase coordinates ────────────────────────────
     screenshot, coords, code_coords, table_coords = capture_page(html_path, output_dir)
-    if len(coords) != len(phrases):
-        warn(
-            f"Coord count ({len(coords)}) doesn't match phrase count "
-            f"({len(phrases)}). Highlight alignment may drift."
-        )
+    for message in _check_phrase_coverage(phrases, annotated, coords):
+        warn(message)
 
     # ── 4. TTS ────────────────────────────────────────────────────────────────
     step("Synthesising audio …")
