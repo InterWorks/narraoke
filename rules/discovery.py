@@ -6,15 +6,28 @@ resolution chain:
 
     tier 3 (company)   --company-rules PATH
                     -> $NARRAOKE_COMPANY_RULES
-                    -> "company_rules_dir" in config.json
+                    -> "company_rules_dir" in narraoke.config.json
 
     tier 2 (user)      --user-rules PATH
                     -> $NARRAOKE_USER_RULES
-                    -> "user_rules_dir" in config.json
-                    -> ${XDG_CONFIG_HOME:-~/.config}/narraoke/rules.d/
+                    -> "user_rules_dir" in narraoke.config.json
 
-This flag -> env-var -> config -> default chain mirrors `_hf_cache_root` in
+This flag -> env-var -> config chain mirrors `_hf_cache_root` in
 tts_engine.py, so it matches a convention already in the codebase.
+
+**The config file is repo-local**, not `~/.config`: the deliberate choice is
+that a checkout should be self-contained, so everything needed to reproduce a
+render sits beside the code rather than in a hidden per-user location.
+
+Two files make that work without publishing anyone's paths:
+
+    narraoke.config.json          real, gitignored — your machine's paths
+    narraoke.config.example.json  committed — the schema and a worked example
+
+**Relative paths resolve against the config file**, not the working directory.
+`"../narraoke-overrides"` therefore means "a sibling of this checkout" no
+matter where `narraoke` is invoked from, which is what makes a relative path
+safe to write down at all.
 
 **The two tiers fail differently, on purpose.** An unconfigured company tier
 is simply empty and silent. But a company path that *is* configured and does
@@ -31,39 +44,44 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-CONFIG_DIR_NAME = "narraoke"
-CONFIG_FILE_NAME = "config.json"
-USER_RULES_DIR_NAME = "rules.d"
+CONFIG_FILE_NAME = "narraoke.config.json"
+EXAMPLE_CONFIG_FILE_NAME = "narraoke.config.example.json"
 
 ENV_COMPANY_RULES = "NARRAOKE_COMPANY_RULES"
 ENV_USER_RULES = "NARRAOKE_USER_RULES"
+
+# The repo root — this file is rules/discovery.py, so two levels up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 class CompanyRulesMissing(RuntimeError):
     """A company rules directory was configured but does not exist."""
 
 
-def config_home() -> Path:
-    """`$XDG_CONFIG_HOME` if set, else `~/.config`."""
-    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
-    if xdg:
-        return Path(xdg)
-    return Path.home() / ".config"
-
-
 def config_path() -> Path:
-    """Where the app config file lives."""
-    return config_home() / CONFIG_DIR_NAME / CONFIG_FILE_NAME
+    """The repo-local config file. May not exist; that is normal."""
+    return _REPO_ROOT / CONFIG_FILE_NAME
 
 
-def default_user_rules_dir() -> Path:
-    """The tier-2 location when nothing overrides it."""
-    return config_home() / CONFIG_DIR_NAME / USER_RULES_DIR_NAME
+def example_config_path() -> Path:
+    """The committed example, documenting the schema."""
+    return _REPO_ROOT / EXAMPLE_CONFIG_FILE_NAME
 
 
-def _expand(value: str) -> Path:
-    """Expand `~` and environment variables in a configured path."""
-    return Path(os.path.expandvars(os.path.expanduser(value.strip())))
+def _expand(value: str, base: Path | None = None) -> Path:
+    """Expand `~` and env vars; resolve a relative path against *base*.
+
+    Paths from the config file are resolved against the config file's own
+    directory rather than the process working directory, so
+    `"../narraoke-overrides"` keeps meaning "a sibling of this checkout"
+    however narraoke is invoked. Paths from a flag or an env var are left to
+    the shell's usual cwd-relative interpretation, which is what a caller
+    typing a path expects.
+    """
+    expanded = Path(os.path.expandvars(os.path.expanduser(value.strip())))
+    if base is not None and not expanded.is_absolute():
+        return (base / expanded).resolve()
+    return expanded
 
 
 def resolve_company_rules_dir(
@@ -77,21 +95,23 @@ def resolve_company_rules_dir(
     against.
     """
     config = config or {}
-    candidates: list[tuple[str, str]] = []
+    config_base = config_path().parent
+    # (source label, raw value, base for relative paths)
+    candidates: list[tuple[str, str, Path | None]] = []
     if flag:
-        candidates.append(("--company-rules", flag))
+        candidates.append(("--company-rules", flag, None))
     env_value = os.environ.get(ENV_COMPANY_RULES, "").strip()
     if env_value:
-        candidates.append((f"${ENV_COMPANY_RULES}", env_value))
+        candidates.append((f"${ENV_COMPANY_RULES}", env_value, None))
     configured = config.get("company_rules_dir")
     if isinstance(configured, str) and configured.strip():
-        candidates.append((str(config_path()), configured))
+        candidates.append((str(config_path()), configured, config_base))
 
     if not candidates:
         return None  # unconfigured is fine — the tier is simply empty
 
-    source, raw = candidates[0]
-    path = _expand(raw)
+    source, raw, base = candidates[0]
+    path = _expand(raw, base)
     if not path.is_dir():
         raise CompanyRulesMissing(
             f"company rules directory {str(path)!r} (from {source}) does not "
@@ -111,18 +131,16 @@ def resolve_user_rules_dir(
     personal preferences, so most machines will not have one.
     """
     config = config or {}
-    for raw in (
-        flag,
-        os.environ.get(ENV_USER_RULES, "").strip() or None,
-        (config.get("user_rules_dir")
-         if isinstance(config.get("user_rules_dir"), str) else None),
+    configured = config.get("user_rules_dir")
+    for raw, base in (
+        (flag, None),
+        (os.environ.get(ENV_USER_RULES, "").strip() or None, None),
+        (configured if isinstance(configured, str) else None, config_path().parent),
     ):
         if raw and raw.strip():
-            path = _expand(raw)
+            path = _expand(raw, base)
             return path if path.is_dir() else None
-
-    default = default_user_rules_dir()
-    return default if default.is_dir() else None
+    return None
 
 
 def rule_files_in(directory: Path) -> list[Path]:

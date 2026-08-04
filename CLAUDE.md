@@ -52,7 +52,7 @@ regenerate to make a failing test pass.
 |---|---|---|
 | 1 Project | one document | `<markdown>.tts-overrides.json`, beside the source |
 | 2 User | all my projects, private | `${XDG_CONFIG_HOME:-~/.config}/narraoke/rules.d/*.json` |
-| 3 Company | shared with a group | `InterWorks/narraoke-overrides` (private), path set in `config.json` |
+| 3 Company | shared with a group | `InterWorks/narraoke-overrides` (private), path set in `narraoke.config.json` |
 | 4 Universal | everyone | Python literals in `html_to_video.py` |
 
 Tier 3 splits into **3a** (confidential — the leak-scan gate) and **3b** (org
@@ -68,6 +68,14 @@ logic stay in tier 4 as reviewed Python.
 Full tier assignment for every rule, with reasoning: [docs/rule-triage.md](docs/rule-triage.md).
 
 Precedence: **project → user → company → universal** (most specific first).
+
+Tier 2 and 3 paths come from `narraoke.config.json` at the repo root —
+**gitignored**, with `narraoke.config.example.json` committed alongside it as
+the schema. The config is repo-local rather than in `~/.config` so a checkout
+is self-contained. Relative paths in it resolve against the config file, not
+the working directory, so `"../narraoke-overrides"` holds however narraoke is
+invoked. A `--company-rules` / `--user-rules` flag or the `$NARRAOKE_*` env
+vars override it.
 
 Choosing a tier: *would this make sense to a stranger who has never heard of
 our employer or clients, in any technical document?* If yes, tier 4.

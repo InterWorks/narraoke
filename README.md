@@ -124,11 +124,39 @@ Rules resolve in four tiers, most specific first:
 |---|---|---|
 | **1 Project** | one document | `<markdown>.tts-overrides.json`, beside the source |
 | **2 User** | all your projects, private to you | `${XDG_CONFIG_HOME:-~/.config}/narraoke/rules.d/*.json` |
-| **3 Company** | shared with a group | a cloned private repo, path set in `config.json` |
+| **3 Company** | shared with a group | a cloned private repo, path set in `narraoke.config.json` |
 | **4 Universal** | everyone | Python literals, packaged with the app |
 
 Precedence is **project → user → company → universal**. Each tier can shadow
 the more general ones beneath it.
+
+### Pointing at your rule directories
+
+Tiers 2 and 3 live outside this repo, so their paths come from a config file at
+the repo root. Copy the committed example and edit it:
+
+```bash
+cp narraoke.config.example.json narraoke.config.json
+```
+
+```jsonc
+{
+  "company_rules_dir": "../narraoke-overrides",
+  "user_rules_dir": "~/.config/narraoke/rules.d"
+}
+```
+
+The real file is gitignored — it holds paths specific to your machine. Both
+keys are optional; omit one and that tier is simply empty.
+
+**Relative paths resolve against the config file**, not your working directory,
+so `"../narraoke-overrides"` means "a sibling of this checkout" wherever you
+run narraoke from. `--company-rules` / `--user-rules` and the
+`$NARRAOKE_COMPANY_RULES` / `$NARRAOKE_USER_RULES` env vars override it.
+
+If a company path is set but does not exist, narraoke **fails** rather than
+rendering without it — a silently-absent rule means a name gets mispronounced
+in a delivered video. Leaving the key out entirely is fine and silent.
 
 Choosing a tier — *would this rule make sense to a stranger who has never heard
 of your employer or clients, in any technical document?* If yes, it is

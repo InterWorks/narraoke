@@ -1,0 +1,32 @@
+// Example narraoke config. Copy to `narraoke.config.json` (gitignored) and
+// edit the paths for your machine:
+//
+//     cp narraoke.config.example.json narraoke.config.json
+//
+// Both keys are optional. Omit one and that tier is simply empty.
+//
+// RELATIVE PATHS RESOLVE AGAINST THIS FILE, not the working directory, so
+// "../narraoke-overrides" means "a sibling of this checkout" however narraoke
+// is invoked. `~` and $ENV_VARS are expanded.
+//
+// Precedence, highest first:
+//     --company-rules / --user-rules   (a flag, for one run)
+//     $NARRAOKE_COMPANY_RULES / $NARRAOKE_USER_RULES
+//     this file
+{
+  // Tier 3 — company rules, shared with the team. A clone of the private
+  // rules repo; holds client names, internal channels, and contacts that must
+  // never reach this public repository.
+  //
+  // If this path is set but does not exist, narraoke FAILS rather than
+  // rendering without it: a silently-absent rule means a client name gets
+  // mispronounced in a delivered video. Leaving the key out entirely is fine
+  // and silent.
+  "company_rules_dir": "../narraoke-overrides",
+
+  // Tier 2 — your own rules, private to you and applied across every project.
+  // Absent is normal; most machines will not have one. Any *.json in the
+  // directory is loaded, in sorted order, so a 10-/20- prefix fixes rule
+  // order across files.
+  "user_rules_dir": "~/.config/narraoke/rules.d"
+}

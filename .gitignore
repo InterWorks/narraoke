@@ -18,6 +18,10 @@ dist/
 rules.d/
 config.json
 
+# The real config holds paths specific to this machine and stays local.
+# narraoke.config.example.json IS committed and documents the schema.
+narraoke.config.json
+
 # Exception: the migration-witness fixtures. These are REDACTED test data —
 # the five tier-3a rules are placeholders — and the migration-equivalence test
 # cannot run without them. Verified leak-scan clean.

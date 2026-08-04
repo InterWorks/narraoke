@@ -122,16 +122,63 @@ def test_directory_composes_into_one_ruleset(tmp_path: Path) -> None:
 
 # ── the whole stack ──────────────────────────────────────────────────────────
 
-def test_build_stack_with_empty_tiers_matches_builtin_only(tmp_path: Path) -> None:
-    """Installing the tier machinery changed nothing while 2 and 3 are empty.
+def test_build_stack_with_empty_tiers_matches_builtin_only(monkeypatch) -> None:
+    """With every optional tier absent, only the built-ins apply.
 
-    This is the property that let stages 1 and 2 land before any rule moved.
+    This is the property that let the tier machinery land before any rule
+    moved. The config is patched out because this checkout has a real
+    narraoke.config.json pointing at the company rules repo.
     """
     from rules.stack import RuleStack
 
+    monkeypatch.setattr(h, "load_app_config", dict)
     built = h.build_rule_stack()
     baseline = RuleStack.builtin_only(h._LITERAL_TTS_OVERRIDES)
     assert built.literal_pairs() == baseline.literal_pairs()
+
+
+def test_repo_config_is_read_from_the_repo_root(monkeypatch) -> None:
+    """The config lives beside the code, not in ~/.config.
+
+    A checkout should be self-contained: everything needed to reproduce a
+    render sits in the repo rather than a hidden per-user location.
+    """
+    assert d.config_path().name == "narraoke.config.json"
+    assert d.config_path().parent == Path(__file__).resolve().parent.parent
+    assert d.example_config_path().name == "narraoke.config.example.json"
+
+
+def test_config_relative_paths_resolve_against_the_config_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """`"../narraoke-overrides"` must not depend on the working directory.
+
+    Resolving against the config file is what makes a relative path safe to
+    commit: it means "a sibling of this checkout" however narraoke is invoked.
+    """
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    sibling = _rule_dir(tmp_path, "sibling-rules", [])
+    monkeypatch.setattr(d, "config_path", lambda: checkout / "narraoke.config.json")
+
+    monkeypatch.chdir(tmp_path)
+    from_root = d.resolve_company_rules_dir(None, {"company_rules_dir": "../sibling-rules"})
+    monkeypatch.chdir(checkout)
+    from_elsewhere = d.resolve_company_rules_dir(
+        None, {"company_rules_dir": "../sibling-rules"}
+    )
+    assert from_root == from_elsewhere == sibling.resolve()
+
+
+def test_flag_paths_stay_cwd_relative(tmp_path: Path, monkeypatch) -> None:
+    """A path typed on the command line means what the shell would mean.
+
+    Only config-file paths resolve against the config; a flag is interpreted
+    relative to the working directory, which is what a caller expects.
+    """
+    target = _rule_dir(tmp_path, "cli-rules", [])
+    monkeypatch.chdir(tmp_path)
+    assert d.resolve_company_rules_dir("cli-rules", {}) == Path("cli-rules")
 
 
 def test_company_rules_are_shadowed_by_project_duplicates(tmp_path: Path) -> None:

@@ -198,7 +198,8 @@ the invariant is checked rather than documented.
 
 **The tier-3 repo is `InterWorks/narraoke-overrides`** (private), cloned
 locally at `../narraoke-overrides`. Its path is set per-machine via
-`company_rules_dir` in `~/.config/narraoke/config.json`, or
+`company_rules_dir` in `narraoke.config.json` at the repo root (gitignored;
+`narraoke.config.example.json` is committed as the schema), or
 `$NARRAOKE_COMPANY_RULES`, or `--company-rules`.
 
 Tier 3 holds two distinct kinds of rule, and the distinction matters. Keep
