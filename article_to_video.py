@@ -1,12 +1,30 @@
 #!/usr/bin/env -S uv run python
 """
-article_to_video — Convert a web article to TTS audio (+ optional karaoke video).
+article_to_video — Narrate plain prose: a URL, a text file, or pasted input.
+
+One of two entry points, distinguished by how the source is rendered:
+
+  * this module handles **plainer prose** from anywhere — it fetches and
+    strips a web article, or reads a text file, then draws the text onto
+    generated frames with PIL. No browser, and no assumptions about document
+    structure.
+  * `html_to_video.py` handles **richly formatted documents**: markdown with
+    known structure, rendered as styled HTML and screenshotted by a headless
+    browser so code blocks, tables, and typography survive.
+
+Neither supersedes the other: they take different inputs and use different
+renderers. Merging them behind one auto-detecting entry point is tracked as a
+separate piece of work.
+
+Requires the `article` extra for its extraction stack:
+
+    uv sync --extra article
 
 Usage
 -----
-  python article_to_video.py <URL> [options]
-  python article_to_video.py --text-file article.txt [options]
-  python article_to_video.py            # interactive paste (end with Ctrl-D)
+  uv run narraoke-article <URL> [options]
+  uv run narraoke-article --text-file article.txt [options]
+  uv run narraoke-article            # interactive paste (end with Ctrl-D)
 
 See --help for full argument list.
 """
@@ -52,7 +70,7 @@ ARTICLE_VOICE_BLACKLIST: frozenset[str] = frozenset({"af_nicole"})
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="article_to_video",
+        prog="narraoke-article",
         description="Convert a web article to TTS audio and optional karaoke video.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

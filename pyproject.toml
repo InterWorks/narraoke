@@ -29,10 +29,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The superseded URL->video path (article_to_video.py, extractor.py,
-# video_gen.py) is the only consumer of these. Verified: zero references in
-# html_to_video.py, the live tool.
-legacy = [
+# The article path (article_to_video.py, extractor.py, video_gen.py) fetches
+# and extracts web articles, which needs a heavier dependency set than the
+# document path. Optional so that rendering a local markdown file — the common
+# case — does not pull in an HTML-extraction stack.
+#
+#     uv sync --extra article
+article = [
     "trafilatura>=1.12.0",
     "newspaper3k>=0.2.8",
     "lxml>=5.0.0",
@@ -48,7 +51,14 @@ dev = [
 ]
 
 [project.scripts]
+# Two entry points for two input classes. `narraoke` renders a structured
+# markdown document through a headless browser, preserving styling, code
+# blocks, and tables. `narraoke-article` fetches or reads plainer prose and
+# renders text onto generated frames — no browser involved.
+#
+# See the auto-detection issue for the eventual single-entry-point design.
 narraoke = "html_to_video:main"
+narraoke-article = "article_to_video:main"
 
 [tool.setuptools]
 # Mostly a flat single-module layout — these are modules, not a package. The

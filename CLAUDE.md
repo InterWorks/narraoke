@@ -1,8 +1,8 @@
 # narraoke — working notes
 
-Turns a structured markdown document into a narrated, teleprompter-style
-scrolling video: markdown → styled HTML → tall headless-Chromium screenshot →
-per-phrase keyframes → ffmpeg concat, muxed with Kokoro TTS audio.
+Turns a document into a narrated, teleprompter-style scrolling video. The main
+path: markdown → styled HTML → tall headless-Chromium screenshot → per-phrase
+keyframes → ffmpeg concat, muxed with Kokoro TTS audio.
 
 ## Never sort, dedupe, or reorder the TTS rule lists
 
@@ -24,12 +24,22 @@ Once the rules live in the `rules/` package, the same warning extends to
 list in `rules/__init__.py`, never from import order. Reordering imports must
 stay harmless.
 
-## Two apps live here
+## Two entry points live here
 
-`html_to_video.py` is the live tool and the product. `article_to_video.py`
-(+ `extractor.py`, `video_gen.py`) is a **superseded** URL→video path, kept
-behind the `legacy` optional-dependency extra. Changes belong in
-`html_to_video.py` unless the task is explicitly about the legacy path.
+`html_to_video.py` (`narraoke`) handles **richly formatted documents**:
+structured markdown, rendered as styled HTML and screenshotted by a headless
+browser. `article_to_video.py` (`narraoke-article`, + `extractor.py` and
+`video_gen.py`) handles **plainer prose** — a URL, a text file, or pasted
+input — behind the `article` optional-dependency extra.
+
+**Neither supersedes the other.** They take different inputs and use
+incompatible renderers: `html_to_video` screenshots styled HTML through a
+headless browser so code blocks and tables survive; `article_to_video` draws
+text onto blank frames with PIL, which is what lets it work on input that has
+no structure to preserve. Both share `utils`, `tts_engine`, and `timing`.
+
+Work on whichever matches the input class in question. Merging them behind one
+auto-detecting entry point is tracked in [issue #1](https://github.com/InterWorks/narraoke/issues/1), not assumed.
 
 ## Verification shortcut
 
@@ -53,7 +63,7 @@ regenerate to make a failing test pass.
 | 1 Project | one document | `<markdown>.tts-overrides.json`, beside the source |
 | 2 User | all my projects, private | `${XDG_CONFIG_HOME:-~/.config}/narraoke/rules.d/*.json` |
 | 3 Company | shared with a group | `InterWorks/narraoke-overrides` (private), path set in `narraoke.config.json` |
-| 4 Universal | everyone | Python literals in `html_to_video.py` |
+| 4 Universal | everyone | Python literals in `rules/`, split by defect type |
 
 Tier 3 splits into **3a** (confidential — the leak-scan gate) and **3b** (org
 defaults: shared, but public technology terms). Keeping them in separate files

@@ -1310,7 +1310,7 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-legacy = [
+article = [
     { name = "ffmpeg-python" },
     { name = "lxml" },
     { name = "lxml-html-clean" },
@@ -1326,21 +1326,21 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ffmpeg-python", marker = "extra == 'legacy'", specifier = ">=0.2.0" },
+    { name = "ffmpeg-python", marker = "extra == 'article'", specifier = ">=0.2.0" },
     { name = "huggingface-hub", specifier = ">=0.23" },
     { name = "kokoro", specifier = ">=0.9.0" },
-    { name = "lxml", marker = "extra == 'legacy'", specifier = ">=5.0.0" },
-    { name = "lxml-html-clean", marker = "extra == 'legacy'" },
-    { name = "moviepy", marker = "extra == 'legacy'", specifier = ">=2.0.0" },
-    { name = "newspaper3k", marker = "extra == 'legacy'", specifier = ">=0.2.8" },
+    { name = "lxml", marker = "extra == 'article'", specifier = ">=5.0.0" },
+    { name = "lxml-html-clean", marker = "extra == 'article'" },
+    { name = "moviepy", marker = "extra == 'article'", specifier = ">=2.0.0" },
+    { name = "newspaper3k", marker = "extra == 'article'", specifier = ">=0.2.8" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pydub", specifier = ">=0.25.1" },
     { name = "soundfile", specifier = ">=0.12.1" },
     { name = "torch", specifier = ">=2.3.0", index = "https://download.pytorch.org/whl/cu124" },
-    { name = "trafilatura", marker = "extra == 'legacy'", specifier = ">=1.12.0" },
+    { name = "trafilatura", marker = "extra == 'article'", specifier = ">=1.12.0" },
 ]
-provides-extras = ["legacy"]
+provides-extras = ["article"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]

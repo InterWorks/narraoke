@@ -2,9 +2,19 @@
 
 **Karaoke for your docs.**
 
-Turn a structured markdown document into a narrated, teleprompter-style
-scrolling video. The active phrase is highlighted in sync with the narration —
-*narrator* + *karaoke*, hence the name.
+Turn a document into a narrated, teleprompter-style scrolling video. The
+active phrase is highlighted in sync with the narration — *narrator* +
+*karaoke*, hence the name.
+
+Two entry points, for two kinds of source:
+
+| | Input | Rendering |
+|---|---|---|
+| **`narraoke`** | structured markdown | styled HTML, screenshotted by a headless browser — keeps code blocks, tables, and typography |
+| **`narraoke-article`** | a URL, text file, or pasted prose | text drawn onto generated frames with PIL — no browser, no structure assumed |
+
+Most of this README covers `narraoke`; see [the article path](#the-article-path)
+for the other.
 
 ---
 
@@ -280,10 +290,15 @@ silently drop TTS to the 160x-slower CPU path without failing any test.
 
 ```
 narraoke/
-├── html_to_video.py   # The live tool — CLI entry point (`narraoke`)
-├── tts_engine.py      # Kokoro TTS synthesis
-├── timing.py          # Phrase timing + SRT/JSON output
-├── utils.py           # Shared helpers (slugify, ffmpeg checks, logging)
+├── html_to_video.py   # Rich documents — CLI entry point (`narraoke`)
+├── article_to_video.py # Plain prose — CLI entry point (`narraoke-article`)
+├── extractor.py       #   its URL fetching + boilerplate stripping
+├── video_gen.py       #   its PIL text-frame renderer
+├── docconfig.py       # Per-document render settings
+├── rules/             # Tier-4 pronunciation rules + the tier stack
+├── tts_engine.py      # Kokoro TTS synthesis          (shared)
+├── timing.py          # Phrase timing + SRT/JSON output (shared)
+├── utils.py           # Slugify, ffmpeg checks, logging (shared)
 ├── scripts/
 │   └── leak_scan.py   # Raw-bytes denylist scan for confidential material
 ├── tests/             # Golden-file tests for the rule pipeline
@@ -293,16 +308,26 @@ narraoke/
 └── uv.lock            # Pinned versions + sha256 hashes (source of truth)
 ```
 
-### Legacy path
+### The article path
 
-`article_to_video.py` (with `extractor.py` and `video_gen.py`) is a superseded
-URL→video tool kept behind an optional extra:
+`article_to_video.py` (with `extractor.py` and `video_gen.py`) narrates
+**plainer prose** from anywhere — a URL, a text file, or pasted input:
 
 ```bash
-uv sync --extra legacy
+uv sync --extra article
+uv run narraoke-article https://example.com/some-article
+uv run narraoke-article --text-file notes.txt
 ```
 
-It is not the product. Changes belong in `html_to_video.py`.
+It fetches and strips the article, then draws the text onto generated frames
+with PIL. No browser, and no assumptions about document structure — which is
+exactly what makes it work on input `narraoke` cannot handle.
+
+Its dependencies are an optional extra so that rendering a local markdown
+file, the common case, does not pull in an HTML-extraction stack.
+
+Merging the two behind one auto-detecting entry point is tracked in
+[issue #1](https://github.com/InterWorks/narraoke/issues/1).
 
 ---
 

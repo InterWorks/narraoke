@@ -2,8 +2,20 @@
 """
 html_to_video — Turn a structured markdown doc into a narrated, scrolling video.
 
-Unlike `article_to_video.py`, which fetches and reconstructs an article from a
-URL, this tool consumes a *local markdown file with known structure*. It:
+One of two entry points, distinguished by how the source is rendered:
+
+  * this module renders **richly formatted documents**. The markdown becomes
+    styled HTML, which a headless browser screenshots, so code blocks, tables,
+    and typography survive into the video.
+  * `article_to_video.py` handles **plainer prose** — a URL, a text file, or
+    pasted input — and draws the text onto generated frames with PIL. No
+    browser, and no assumptions about document structure.
+
+Neither supersedes the other: they take different inputs and use different
+renderers. Merging them behind one auto-detecting entry point is tracked as a
+separate piece of work.
+
+This tool consumes a *local markdown file with known structure*. It:
 
   1. Splits the markdown into narration phrases (skipping any table sections).
   2. Renders a video-only HTML page where every phrase is wrapped in a
