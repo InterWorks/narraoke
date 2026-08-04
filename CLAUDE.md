@@ -8,8 +8,9 @@ keyframes → ffmpeg concat, muxed with Kokoro TTS audio.
 
 **Order is semantics, not style.** `_apply_literal_overrides` is a sequential
 `str.replace` over a mutating buffer, and `rewrite_for_tts` runs a hand-tuned
-12-step sequence: ranges expand before quote/paren wrapping, IPA escapes land
-last so their brackets and slashes are not reprocessed. Several regexes carry
+sequence of ~19 passes: wildcard versions before plain ones, versions before
+dotted filenames, ranges before quote/paren wrapping, IPA escapes last so
+their brackets and slashes are not reprocessed. Several regexes carry
 `(?!\]\(/)` guards against double-wrapping.
 
 Inline comments like "longer first" are **load-bearing**. `~/.claude.json` must
@@ -19,10 +20,10 @@ must precede `JSON`. Reordering silently changes generated audio.
 This is the mistake most likely to be made by a well-meaning linter or a
 tidy-up commit. `tests/test_rewrite_for_tts.py` will catch it — run it.
 
-Once the rules live in the `rules/` package, the same warning extends to
-**import statements**: order comes from the explicit `ORDERED_RULE_SOURCES`
-list in `rules/__init__.py`, never from import order. Reordering imports must
-stay harmless.
+The same warning extends to **import statements** in the `rules/` package:
+order comes from the explicit `ORDERED_RULE_SOURCES` list in
+`rules/__init__.py`, never from import order. Reordering imports must stay
+harmless, and a test asserts it.
 
 ## Two entry points live here
 
@@ -61,7 +62,7 @@ regenerate to make a failing test pass.
 | Tier | Scope | Lives in |
 |---|---|---|
 | 1 Project | one document | `<markdown>.tts-overrides.json`, beside the source |
-| 2 User | all my projects, private | `${XDG_CONFIG_HOME:-~/.config}/narraoke/rules.d/*.json` |
+| 2 User | all my projects, private | any directory of `*.json`, set as `user_rules_dir` |
 | 3 Company | shared with a group | `InterWorks/narraoke-overrides` (private), path set in `narraoke.config.json` |
 | 4 Universal | everyone | Python literals in `rules/`, split by defect type |
 
@@ -123,15 +124,24 @@ uv run python scripts/leak_scan.py
 
 ## Never commit `output/`, `.venv/`, `.venv-win/`
 
-33.4GB of a 34GB tree. `output/` also holds full narration transcripts
-(`.srt`), so excluding it is a confidentiality control, not just hygiene.
+Tens of gigabytes — `output/` alone runs to ~20GB, and a single render is
+~700MB. `output/` also holds full narration transcripts (`.srt`), so
+excluding it is a confidentiality control, not just hygiene.
+
+Renders are cheap to regenerate and expensive to store; watch free disk
+before starting one.
 
 ## Performance shape (counterintuitive)
 
 TTS needs the GPU — roughly **160x** slower on CPU, turning a 2-minute stage
 into ~5 hours. Encoding barely benefits — about **1.4x** — because the
 bottleneck is PNG decode, not the encoder. Do not move encode work to the GPU
-expecting a win. ~78% of a run is ffmpeg.
+expecting a win.
+
+Every run now prints a per-stage breakdown; read it before optimising
+anything. It already overturned one assumption: **composing keyframes is ~45%
+of a section render**, a PIL stage that slices ~1000 crops out of a
+33,000px-tall PNG and was never previously suspected of being expensive.
 
 `torch` resolves through the pinned `pytorch-cu124` index, so a CUDA-variant
 bump can silently drop TTS to the CPU path with no error. Renovate holds torch

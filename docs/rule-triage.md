@@ -468,15 +468,22 @@ they sit today.
 rules in play at the start (28 code literals + 2 dotfile entries + 10 regex
 functions + 44 onboarding literals + 1 named pronunciation).
 
-**Tier 4 as it stands in code today:** 21 literals + 2 dotfile entries + 12
-regex functions = **35 entries**. The literal count fell from 28 to 21 (−4
-`*_id`, −1 `KEY=value`, −2 camelCase to tier 1) while the regex count rose from
-10 to 12, so the package is smaller *and* more general — the two new patterns
-cover identifiers and assignments no document has used yet.
+**Tier 4 as it stands in code today:** **15 literals** + 2 dotfile entries,
+with the `rewrite_for_tts` pipeline grown to ~19 passes.
 
-The dotted-config promotion (`.mcp.json` and friends → a general hidden-file
-pattern) is still outstanding; those three literals remain in
-`rules/filenames.py` and are counted in the 21.
+The literal count fell from 28 as each enumeration became a pattern:
+
+| Promotion | Literals removed |
+|---|---|
+| `_spell_out_id_suffix` | 4 (`custom_id` and friends) |
+| `_spell_out_assignments` | 1 (`KEY=value`) |
+| `_spell_out_versions` | 1 (`4.28.1`) |
+| `_spell_out_wildcard_versions` | 1 (`4.x`) |
+| `_spell_out_hidden_dotted_names` | 3 (`.mcp.json` and friends) |
+
+Plus 2 camelCase literals to tier 1 and 1 duplicate dropped. The package is
+smaller *and* more general: every promotion covers inputs no source document
+has used yet, which is the whole point of preferring a pattern to a list.
 
 Every rule appears in exactly one section above, and each dropped rule carries
 a reason.
