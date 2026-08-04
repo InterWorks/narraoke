@@ -20,8 +20,8 @@ python = "3.10"
 # NARRAOKE_CHROMIUM = "/snap/chromium/current/usr/lib/chromium-browser/chrome"
 
 [tasks.render]
-description = "Render a markdown document to video"
-run = "uv run python html_to_video.py"
+description = "Render a markdown document to video (pass the path as an argument)"
+run = "uv run narraoke"
 
 [tasks.test]
 description = "Run the golden-file rule tests (sub-second; no render)"

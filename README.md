@@ -26,7 +26,9 @@ markdown → styled HTML → tall headless-Chromium screenshot
         → ffmpeg concat, muxed with Kokoro TTS audio
 ```
 
-1. Split the markdown into narration phrases (skipping table sections).
+1. Split the markdown into narration phrases. Code blocks and tables are not
+   read out; each gets a spoken summary, then the camera dwells on it or
+   scrolls through it while you read.
 2. Render a video-only HTML page wrapping every phrase in a locatable span.
 3. Synthesise TTS audio with Kokoro.
 4. Generate per-phrase timing data.
@@ -83,6 +85,22 @@ ffmpeg -encoders | grep -E 'h264_nvenc|libx264'
 The Kokoro model (~327MB) downloads to the Hugging Face cache on first run and
 is reused offline thereafter.
 
+To also use the article path, install its extraction stack:
+
+```bash
+uv sync --extra article
+```
+
+Common commands are defined as mise tasks, so the invocation is
+version-controlled rather than living in shell history. mise requires a
+config to be trusted before it will run anything from it:
+
+```bash
+mise trust
+mise run test
+mise run leak-scan
+```
+
 ---
 
 ## Usage
@@ -105,6 +123,9 @@ uv run narraoke <markdown-path> [options]
 | `--section-workers` | 4 | How many section MP4s to encode at once; `1` is sequential |
 | `--preview` | off | Open the primary output when the run finishes |
 | `--overrides` | auto-discovered sibling | Path to a `.tts-overrides.json` rule file |
+| `--video-config` | auto-discovered sibling | Path to a `.video.json` render-settings file |
+| `--company-rules` | from `narraoke.config.json` | Directory of shared company rules (tier 3) |
+| `--user-rules` | from `narraoke.config.json` | Directory of personal rules (tier 2) |
 | `--no-split-sections` | off | Skip per-section MP4s |
 
 ### Examples
@@ -198,9 +219,9 @@ Rules resolve in four tiers, most specific first:
 | Tier | Scope | Lives in |
 |---|---|---|
 | **1 Project** | one document | `<markdown>.tts-overrides.json`, beside the source |
-| **2 User** | all your projects, private to you | `${XDG_CONFIG_HOME:-~/.config}/narraoke/rules.d/*.json` |
-| **3 Company** | shared with a group | a cloned private repo, path set in `narraoke.config.json` |
-| **4 Universal** | everyone | Python literals, packaged with the app |
+| **2 User** | all your projects, private to you | any directory of `*.json`, set as `user_rules_dir` |
+| **3 Company** | shared with a group | a cloned private repo, set as `company_rules_dir` |
+| **4 Universal** | everyone | Python literals in `rules/`, packaged with the app |
 
 Precedence is **project → user → company → universal**. Each tier can shadow
 the more general ones beneath it.
@@ -242,11 +263,46 @@ contact, it belongs in the private company tier and **nowhere else**.
 > confidential, the rule is company-tier even when `from` and `to` look
 > innocuous.
 
+### What a rule file can contain
+
+Three optional sections:
+
+```jsonc
+{
+  "literal": [
+    {"from": "SHA", "to": "Sha", "why": "reads as letters otherwise"}
+  ],
+  "named_pronunciations": [
+    {"name": "Acme", "ipa": "/ˈækmi/", "hint": "AK-mee"}
+  ],
+  "regex": [
+    {"pattern": "\\bCI/CD\\b", "replacement": "C.I. C.D.",
+     "stage": "pre_ipa", "flags": ["IGNORECASE"]}
+  ]
+}
+```
+
+**`regex` takes string replacements only — never code.** Backreferences
+(`\1`, `\g<name>`) work as usual, but a rule file can never supply a Python
+callable. That restriction is what makes it safe to load a rules directory
+someone else maintains: without it, a shared repo would be an
+arbitrary-code-execution path.
+
+`stage` is `pre_ipa` (default, before the pattern rules) or `post` (after
+them). `flags` accepts `IGNORECASE`, `MULTILINE`, `DOTALL`, and `UNICODE` —
+an allowlist, so a rule file stays reviewable by reading it. An invalid
+pattern is reported at load time and that one rule is skipped; the rest of
+the file still loads.
+
 ### Rule ordering is semantics
 
 Rules apply sequentially over a mutating buffer, so **order is meaning, not
 style**. Longer patterns must precede shorter ones they contain
 (`~/.claude.json` before `.claude.json`). Never sort or dedupe these lists.
+
+Files in a rules directory load in sorted order, so a `10-`/`20-` numeric
+prefix fixes application order across files the same way list position does
+within one.
 
 ---
 
@@ -302,7 +358,10 @@ narraoke/
 ├── scripts/
 │   └── leak_scan.py   # Raw-bytes denylist scan for confidential material
 ├── tests/             # Golden-file tests for the rule pipeline
-├── .mise.toml         # Toolchain pins (uv, python)
+├── docs/
+│   └── rule-triage.md # Which tier every rule belongs to, and why
+├── narraoke.config.example.json  # Rule-directory paths — copy, don't edit
+├── .mise.toml         # Toolchain pins (uv, python) + render/test/lint tasks
 ├── renovate.json      # Dependency automation
 ├── pyproject.toml     # Project metadata + uv config
 └── uv.lock            # Pinned versions + sha256 hashes (source of truth)
