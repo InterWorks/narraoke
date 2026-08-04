@@ -80,6 +80,23 @@ vars override it.
 Choosing a tier: *would this make sense to a stranger who has never heard of
 our employer or clients, in any technical document?* If yes, tier 4.
 
+## Two kinds of config, deliberately separate
+
+| File | Scope | Tracked? |
+|---|---|---|
+| `narraoke.config.json` | the machine — where the rule directories are | no |
+| `<markdown>.video.json` | one document — resolution, pacing, skip_headings, title | with the document |
+
+Render settings belong to the *document*, not the machine, so they sit beside
+the markdown like `.tts-overrides.json` does. `docconfig.py` owns the defaults;
+`apply_doc_config` rebinds the module constants once per run, because those
+constants are read from ~30 sites and threading a config object through every
+signature would be a large refactor of code whose only end-to-end test is a
+16-minute render.
+
+`SKIP_HEADINGS` now defaults to empty. It was hardcoded to one document's
+section name, which meant every document rendered with that document's setting.
+
 ## Confidentiality
 
 Never put company or client names, internal channels, or contacts in tier-4

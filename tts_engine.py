@@ -12,9 +12,16 @@ import random
 import wave
 from pathlib import Path
 
+from docconfig import DEFAULT_NARRATION_SPEED
 from utils import info, warn, step
 
 KOKORO_HF_REPO = "hexgrad/Kokoro-82M"
+
+# Kokoro synthesis rate. Rebound by html_to_video from the document's
+# `.video.json` before synthesis starts. This value was previously written out
+# twice — here and in html_to_video — so changing narration speed meant knowing
+# about both places; docconfig is now the single source of truth.
+NARRATION_SPEED = DEFAULT_NARRATION_SPEED
 
 
 def _hf_cache_root() -> Path:
@@ -188,7 +195,9 @@ def _synthesise_kokoro(
         info(f"  chunk {i+1}/{len(chunks)} — synthesising …")
         audio_arrays = []
         # KPipeline yields (gs, ps, audio) tuples
-        for _, _, audio in pipeline(chunk, voice=voice, speed=1.1, split_pattern=None):
+        for _, _, audio in pipeline(
+            chunk, voice=voice, speed=NARRATION_SPEED, split_pattern=None
+        ):
             if audio is not None:
                 audio_arrays.append(audio)
 

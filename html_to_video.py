@@ -47,6 +47,7 @@ _HERE = Path(__file__).parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
+import docconfig
 import rules
 from rules import discovery as _discovery
 from rules.stack import (
@@ -85,8 +86,12 @@ READ_ZONE = 0.33
 # minterpolate fill in smooth motion between them.
 FPS = 30
 
-# Used to skip sections we don't want narrated (matched against ## headings)
-SKIP_HEADINGS = ("Quick reference card",)
+# Sections to drop wholesale, matched against ## headings.
+#
+# Empty by default: this was previously hardcoded to one specific document's
+# section name, so every document rendered with that document's setting. It is
+# now a per-document value — set `skip_headings` in `<markdown>.video.json`.
+SKIP_HEADINGS: tuple[str, ...] = ()
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -109,7 +114,10 @@ def _default_code_summary(lang: str) -> str:
     return "A code block follows."
 
 
-def load_narration_blocks(md_path: Path) -> list[dict]:
+def load_narration_blocks(
+    md_path: Path,
+    skip_headings: tuple[str, ...] | None = None,
+) -> list[dict]:
     """
     Parse a markdown file into a sequence of *narration blocks* — semantically
     typed chunks of source content that the rest of the pipeline can process.
@@ -120,9 +128,14 @@ def load_narration_blocks(md_path: Path) -> list[dict]:
       - "text": the raw text (markdown still has **bold**, *italic*, `code`)
       - "depth": nesting depth for lists (0 = top-level)
 
-    Sections whose ## heading matches SKIP_HEADINGS are dropped wholesale, so
-    the Quick Reference card never reaches TTS or the rendered HTML.
+    Sections whose ## heading starts with an entry in *skip_headings* are
+    dropped wholesale — they reach neither TTS nor the rendered HTML. The list
+    comes from `skip_headings` in the document's `.video.json`; it was once a
+    module constant naming one specific document's section, which meant every
+    document rendered with that document's setting.
     """
+    if skip_headings is None:
+        skip_headings = SKIP_HEADINGS
     raw = md_path.read_text(encoding="utf-8")
     lines = raw.splitlines()
 
@@ -327,8 +340,8 @@ def load_narration_blocks(md_path: Path) -> list[dict]:
             level = len(m.group(1))
             text = m.group(2).strip()
 
-            # Skip whole-section gating: ## headings that match SKIP_HEADINGS
-            if level == 2 and any(text.startswith(h) for h in SKIP_HEADINGS):
+            # Skip whole-section gating: ## headings that match skip_headings
+            if level == 2 and any(text.startswith(h) for h in skip_headings):
                 skip_this_section = True
                 continue
             # Any new ## heading clears the skip flag
@@ -799,6 +812,45 @@ def load_rule_file(path: Path, tier: str) -> RuleSet:
         named=tuple(named),
         regexes=tuple(regexes),
     )
+
+
+def apply_doc_config(config: "docconfig.DocConfig") -> None:
+    """Install *config*'s video and pacing values as the module constants.
+
+    These constants are read from ~30 sites across the capture, keyframe, and
+    encode functions. Rebinding them once here, before any render work starts,
+    keeps the change small and reviewable; threading a config object through
+    every signature would be a large refactor of code whose only end-to-end
+    test is a 16-minute render.
+
+    Called exactly once per process from `main`, immediately after the config
+    is loaded — narraoke renders one document per run, the same assumption
+    `load_doc_overrides` has always made.
+    """
+    global VIDEO_WIDTH, VIDEO_HEIGHT, FPS, READ_ZONE
+    global LEAD_IN_SECONDS, TAIL_OUT_SECONDS, TITLE_CARD_SILENT_SECONDS
+    global SCROLL_PX_PER_SECOND, DWELL_BOTTOM_PAUSE_S, DWELL_FITS_PAUSE_S
+    global DWELL_MIN_S, DWELL_MAX_S, DEFAULT_CHUNK_CHARS
+
+    VIDEO_WIDTH = config.width
+    VIDEO_HEIGHT = config.height
+    FPS = config.fps
+    READ_ZONE = config.read_zone
+    LEAD_IN_SECONDS = config.lead_in_seconds
+    TAIL_OUT_SECONDS = config.tail_out_seconds
+    TITLE_CARD_SILENT_SECONDS = config.title_card_silent_seconds
+    SCROLL_PX_PER_SECOND = config.scroll_px_per_second
+    DWELL_BOTTOM_PAUSE_S = config.dwell_bottom_pause_s
+    DWELL_FITS_PAUSE_S = config.dwell_fits_pause_s
+    DWELL_MIN_S = config.dwell_min_s
+    DWELL_MAX_S = config.dwell_max_s
+    DEFAULT_CHUNK_CHARS = config.chunk_chars
+
+    # Narration speed lives in tts_engine, which owns synthesis. Imported
+    # here rather than at module scope so the 4.2GB torch stack still loads
+    # lazily — importing it eagerly would slow every --help by seconds.
+    import tts_engine
+    tts_engine.NARRATION_SPEED = config.narration_speed
 
 
 def load_app_config() -> dict:
@@ -1666,7 +1718,11 @@ def _md_inline_to_html_only(text: str) -> str:
     return _md_inline_with_position_map(text)["html"]
 
 
-def render_video_html(annotated_blocks: list[dict], out_path: Path) -> None:
+def render_video_html(
+    annotated_blocks: list[dict],
+    out_path: Path,
+    title_override: str = "",
+) -> None:
     """
     Generate the video-only HTML file: same visual language as the polished
     on-screen doc, but with every narrated phrase wrapped in a known span,
@@ -1679,7 +1735,8 @@ def render_video_html(annotated_blocks: list[dict], out_path: Path) -> None:
     # str.replace rather than .format(): the CSS below is full of literal
     # braces that would need escaping.
     parts.append(_HTML_HEADER.replace(
-        "__DOC_TITLE__", html_lib.escape(_doc_title(annotated_blocks))
+        "__DOC_TITLE__",
+        html_lib.escape(_doc_title(annotated_blocks, title_override)),
     ))
     parts.append('<main class="page">\n')
 
@@ -2679,8 +2736,15 @@ def _section_slug(heading_text: str) -> str:
     return slugify(text)
 
 
-def _doc_title(annotated_blocks: list[dict]) -> str:
-    """Return the doc's h1 title (used in spoken intros + title cards)."""
+def _doc_title(annotated_blocks: list[dict], override: str = "") -> str:
+    """The document title, used in the <title>, spoken intros, and title cards.
+
+    Defaults to the document's h1, which is almost always right. An explicit
+    `title` in the document's `.video.json` wins — useful when the on-screen
+    heading is not what you want spoken or shown on a card.
+    """
+    if override:
+        return override
     for b in annotated_blocks:
         if b["kind"] == "h1":
             return block_narration_text(b)
@@ -2919,6 +2983,7 @@ def _synthesise_section_intros(
         return {}
 
     # Lazy import — same path the main TTS uses
+    import tts_engine
     from tts_engine import _prepare_kokoro_hf_cache, ENGLISH_VOICES, _wav_duration_seconds
     _prepare_kokoro_hf_cache(ENGLISH_VOICES)
     import numpy as np
@@ -2936,7 +3001,10 @@ def _synthesise_section_intros(
             out[idx] = (wav, _wav_duration_seconds(wav))
             continue
         audio_arrays = []
-        for _, _, audio in pipeline(spec["text"], voice=voice, speed=1.1, split_pattern=None):
+        for _, _, audio in pipeline(
+            spec["text"], voice=voice,
+            speed=tts_engine.NARRATION_SPEED, split_pattern=None,
+        ):
             if audio is not None:
                 audio_arrays.append(audio)
         if not audio_arrays:
@@ -2958,6 +3026,7 @@ def render_section_videos(
     output_dir: Path,
     slug: str,
     voice: str,
+    title_override: str = "",
 ) -> list[Path]:
     """
     Render each ## section as an independent MP4: title-card intro + spoken
@@ -2995,7 +3064,7 @@ def render_section_videos(
         if m:
             frame_by_index[int(m.group(1))] = (path, dur)
 
-    doc_title = _doc_title(annotated_blocks)
+    doc_title = _doc_title(annotated_blocks, title_override)
 
     # ── 1. Plan all sections (boundaries + intro text) ───────────────────────
     # For sections 1+, we DROP the h2 heading from both audio and frames: the
@@ -3267,20 +3336,28 @@ def build_parser() -> argparse.ArgumentParser:
              "<markdown>.tts-overrides.json is auto-loaded when present.",
     )
     p.add_argument(
+        "--video-config",
+        default=None,
+        metavar="PATH",
+        help="Path to a per-document render-settings JSONC file. If omitted, "
+             "<markdown>.video.json is auto-loaded when present.",
+    )
+    p.add_argument(
         "--company-rules",
         default=None,
         metavar="DIR",
         help="Directory of shared company rule files (tier 3). Overrides "
-             f"${_discovery.ENV_COMPANY_RULES} and config.json. A configured "
-             "but missing directory is an error, not a warning.",
+             f"${_discovery.ENV_COMPANY_RULES} and "
+             f"{_discovery.CONFIG_FILE_NAME}. A configured but missing "
+             "directory is an error, not a warning.",
     )
     p.add_argument(
         "--user-rules",
         default=None,
         metavar="DIR",
         help="Directory of personal rule files (tier 2). Overrides "
-             f"${_discovery.ENV_USER_RULES} and config.json. "
-             "Defaults to ~/.config/narraoke/rules.d/ when present.",
+             f"${_discovery.ENV_USER_RULES} and "
+             f"{_discovery.CONFIG_FILE_NAME}.",
     )
     p.add_argument(
         "--no-split-sections",
@@ -3507,6 +3584,18 @@ def main() -> None:
     set_rule_stack(stack)
     report_rule_stack(stack)
 
+    # Per-document render settings. Absent is normal — every field defaults to
+    # what used to be hardcoded, so a document without one renders unchanged.
+    doc_config, config_warnings = docconfig.load(
+        md_path, Path(args.video_config).expanduser() if args.video_config else None
+    )
+    for message in config_warnings:
+        warn(f"  {message}")
+    apply_doc_config(doc_config)
+    info("Render settings:")
+    for line in docconfig.summary_lines(doc_config):
+        info(line)
+
     base_output_dir = Path(args.output_dir).expanduser().resolve()
     base_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -3540,14 +3629,14 @@ def main() -> None:
 
     # ── 1. Parse markdown into blocks + phrases ───────────────────────────────
     step(f"Loading {md_path.name} …")
-    blocks = load_narration_blocks(md_path)
+    blocks = load_narration_blocks(md_path, skip_headings=doc_config.skip_headings)
     phrases, annotated = build_phrase_index(blocks)
     info(f"  Blocks: {len(annotated)}, Narration phrases: {len(phrases)}")
 
     # ── 2. Generate video-only HTML ───────────────────────────────────────────
     step("Rendering video HTML …")
     html_path = output_dir / f"{slug}_video.html"
-    render_video_html(annotated, html_path)
+    render_video_html(annotated, html_path, title_override=doc_config.title)
     info(f"  HTML: {html_path}")
 
     # ── 3. Capture screenshot + phrase coordinates ────────────────────────────
@@ -3640,6 +3729,7 @@ def main() -> None:
             output_dir=output_dir,
             slug=slug,
             voice=args.voice,
+            title_override=doc_config.title,
         )
 
     # ── Summary ───────────────────────────────────────────────────────────────

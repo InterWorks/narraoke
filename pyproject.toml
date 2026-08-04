@@ -57,6 +57,7 @@ narraoke = "html_to_video:main"
 # console script would have failed on import.
 py-modules = [
     "html_to_video",
+    "docconfig",
     "tts_engine",
     "timing",
     "utils",

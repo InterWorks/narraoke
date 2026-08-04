@@ -112,6 +112,43 @@ Each run writes to a fresh timestamped version directory under
 
 ---
 
+## Per-document settings
+
+Resolution, pacing, narration speed, and which sections to skip live in a
+companion file beside the markdown — no code edit required:
+
+```
+docs/onboarding.md
+docs/onboarding.md.video.json
+docs/onboarding.md.tts-overrides.json
+```
+
+```jsonc
+{
+  // Sections to drop wholesale, matched against ## headings. They reach
+  // neither the narration nor the rendered page.
+  "skip_headings": ["Quick reference card"],
+
+  // Overrides the <title> and title cards. Defaults to the document's H1.
+  "title": "Working Safely in the Org",
+
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "read_zone": 0.33,          // 0.0 top edge, 1.0 bottom; 0.33 reads as a teleprompter
+  "narration_speed": 1.1,
+
+  "lead_in_seconds": 1.0,     // silence before the first word
+  "tail_out_seconds": 1.0,    // silence after the last
+  "scroll_px_per_second": 75, // pace when scrolling tall code blocks
+  "dwell_max_s": 60.0         // cap so one huge block cannot stall the video
+}
+```
+
+Every field is optional, and the file itself is optional — omit anything and
+the default applies. A bad value warns and falls back rather than aborting a
+16-minute render. `--video-config PATH` overrides the auto-discovered file.
+
 ## Pronunciation rules
 
 Kokoro mispronounces plenty of technical vocabulary. narraoke fixes this with
