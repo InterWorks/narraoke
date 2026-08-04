@@ -2137,6 +2137,73 @@ CHROMIUM_SCREENSHOT_SLICE_H = 8000
 CHROMIUM_SCREENSHOT_SLICE_FLEX = 1500
 
 
+def _diagnose_dom_failure(dom: str, html_path: Path, chromium: str) -> str:
+    """Explain why a DOM dump has no coordinates, as specifically as possible.
+
+    The generic message ("the coordinate-extraction script may have failed")
+    is wrong in the most common case: Chromium never loaded the page at all,
+    and what came back is its own error page. Blaming the script sends people
+    looking in the wrong place.
+    """
+    # Chromium's error pages carry an ERR_* code. A page may mention several
+    # — a failed font fetch reports ERR_INTERNET_DISCONNECTED even when the
+    # page itself loaded fine — so look for the one describing the *document*
+    # first, and only then fall back to whatever else is present.
+    error_code = ""
+    if "ERR_FILE_NOT_FOUND" in dom:
+        error_code = "ERR_FILE_NOT_FOUND"
+    elif "ERR_ACCESS_DENIED" in dom:
+        error_code = "ERR_ACCESS_DENIED"
+    else:
+        match = re.search(r"\bERR_[A-Z_]+", dom)
+        if match:
+            error_code = match.group(0)
+
+    if error_code == "ERR_FILE_NOT_FOUND":
+        exists = html_path.is_file()
+        lines = [
+            f"Chromium reported {error_code} for the page narraoke just wrote:",
+            f"  {html_path}",
+        ]
+        if exists:
+            # The file is there, so this is an access problem, not a missing
+            # file. Snap confinement is by far the most common cause.
+            lines += [
+                "",
+                "That file exists, so Chromium could not *read* it rather than",
+                "not find it. The usual cause is a sandboxed Chromium: snap",
+                "builds are confined to $HOME and cannot read anywhere else.",
+                "",
+                f"Chromium in use: {chromium}",
+                "",
+                "Fixes, easiest first:",
+                "  * render to a path under your home directory",
+                "    (--output-dir ~/somewhere), or move the source document there",
+                "  * install a non-snap chromium and point narraoke at it:",
+                "    NARRAOKE_CHROMIUM=/path/to/chromium",
+            ]
+        else:
+            lines += ["", "The file is missing, which is a narraoke bug — "
+                          "please report it."]
+        return "\n".join(lines)
+
+    if error_code:
+        return (
+            f"Chromium reported {error_code} while loading:\n"
+            f"  {html_path}\n\n"
+            f"Chromium in use: {chromium}\n"
+            f"No phrase coordinates could be extracted."
+        )
+
+    # No error page: the page really did load, so the script is the suspect.
+    return (
+        "Could not find narr-coords element in DOM dump — the page loaded but "
+        "its coordinate-extraction script did not produce output.\n"
+        f"  page: {html_path}\n"
+        f"  dump: {html_path.parent / 'page.html'}"
+    )
+
+
 def capture_page(html_path: Path, output_dir: Path) -> tuple[Path, list[dict], list[dict], list[dict]]:
     """
     Render the video HTML at fixed width × tall natural height and capture
@@ -2191,10 +2258,7 @@ def capture_page(html_path: Path, output_dir: Path) -> tuple[Path, list[dict], l
             dom,
         )
     if not m:
-        raise RuntimeError(
-            "Could not find narr-coords element in DOM dump — "
-            "the page's coordinate-extraction script may have failed."
-        )
+        raise RuntimeError(_diagnose_dom_failure(dom, html_path, chromium))
     coords_raw = html_lib.unescape(m.group(1).strip())
     if not coords_raw:
         raise RuntimeError("narr-coords element was empty.")
