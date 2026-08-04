@@ -91,6 +91,9 @@ uv run narraoke <markdown-path> [options]
 | `--slug` | derived from filename | Custom slug for output filenames |
 | `--smooth` | off | ffmpeg `minterpolate` between keyframes (slow; can artifact at low scroll speeds) |
 | `--skip-tts` | off | Reuse audio and timings from the most recent prior run |
+| `--sections` | all | Render only these sections, e.g. `0,3-5`. Skips the full-length video |
+| `--section-workers` | 4 | How many section MP4s to encode at once; `1` is sequential |
+| `--preview` | off | Open the primary output when the run finishes |
 | `--overrides` | auto-discovered sibling | Path to a `.tts-overrides.json` rule file |
 | `--no-split-sections` | off | Skip per-section MP4s |
 
@@ -106,6 +109,17 @@ run's audio:
 ```bash
 uv run narraoke docs/onboarding.md --skip-tts
 ```
+
+Checking one part of a long document? Render just those sections and skip the
+full-length encode, which is the most expensive single step:
+
+```bash
+uv run narraoke docs/onboarding.md --skip-tts --sections 0,3-5 --preview
+```
+
+Sections are independent and render concurrently by default. On the reference
+document this is the largest single cost in a run, so `--section-workers`
+is where the wall-clock time goes if you want to tune it.
 
 Each run writes to a fresh timestamped version directory under
 `output/<slug>/`, so prior renders are never overwritten.

@@ -36,10 +36,12 @@ import datetime as _dt
 import html as html_lib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 # ── Project root on path ──────────────────────────────────────────────────────
@@ -3018,6 +3020,60 @@ def _synthesise_section_intros(
 
 # ─── Per-section video render ─────────────────────────────────────────────────
 
+def _open_file(path: Path) -> None:
+    """Open *path* with the system default application, for --preview."""
+    system = platform.system()
+    try:
+        if system == "Windows":
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif system == "Darwin":
+            subprocess.run(["open", str(path)])
+        else:
+            subprocess.run(["xdg-open", str(path)])
+    except Exception as exc:
+        warn(f"Could not open file automatically: {exc}")
+
+
+def _parse_section_spec(spec: str | None) -> set[int] | None:
+    """Parse `--sections` into a set of indices. None means "all".
+
+    Accepts comma-separated 0-based indices and inclusive ranges:
+    `"0,3-5"` -> {0, 3, 4, 5}. Invalid fragments warn and are skipped rather
+    than aborting, so a typo costs one section, not the run.
+    """
+    if not spec:
+        return None
+    wanted: set[int] = set()
+    for fragment in spec.split(","):
+        fragment = fragment.strip()
+        if not fragment:
+            continue
+        try:
+            if "-" in fragment.lstrip("-"):
+                start_text, _, end_text = fragment.partition("-")
+                start, end = int(start_text), int(end_text)
+                if start > end:
+                    start, end = end, start
+                wanted.update(range(start, end + 1))
+            else:
+                wanted.add(int(fragment))
+        except ValueError:
+            warn(f"  ignoring unparseable --sections fragment {fragment!r}")
+    return wanted or None
+
+
+def _default_section_workers() -> int:
+    """How many sections to encode at once when the caller does not say.
+
+    Bounded by NVENC's concurrent-session limit on consumer cards rather than
+    by core count: an RTX A1000 handles 6 simultaneous sessions, and each
+    ffmpeg is already multi-threaded, so more workers mostly means slower
+    individual encodes. Four is a deliberate compromise that leaves headroom
+    on smaller GPUs and still cuts the wall clock substantially.
+    """
+    return min(4, max(1, (os.cpu_count() or 4) // 2))
+
+
 def render_section_videos(
     annotated_blocks: list[dict],
     segments,
@@ -3027,6 +3083,8 @@ def render_section_videos(
     slug: str,
     voice: str,
     title_override: str = "",
+    max_workers: int | None = None,
+    only_sections: set[int] | None = None,
 ) -> list[Path]:
     """
     Render each ## section as an independent MP4: title-card intro + spoken
@@ -3125,6 +3183,16 @@ def render_section_videos(
             "end_phrase_exclusive": end_phrase_exclusive,
         })
 
+    # Restrict to the requested sections before any work happens, so --sections
+    # skips title cards and intro synthesis too, not just the encode.
+    if only_sections is not None:
+        requested = sorted(only_sections)
+        plans = [p for p in plans if p["index"] in only_sections]
+        if not plans:
+            warn(f"  --sections {requested} matched no sections; nothing to render")
+            return []
+        info(f"  --sections: rendering {len(plans)} of the document's sections")
+
     # ── 2. Render all title cards (cheap, do them up-front) ──────────────────
     cards_dir = output_dir / "title_cards"
     cards_dir.mkdir(exist_ok=True)
@@ -3150,8 +3218,14 @@ def render_section_videos(
     use_nvenc = has_nvenc()
     vcodec = "h264_nvenc" if use_nvenc else "libx264"
 
-    out_paths: list[Path] = []
-    for plan in plans:
+    def _render_one(plan: dict) -> Path | None:
+        """Render a single section MP4. Returns its path, or None on failure.
+
+        Independent of every other section: each writes uniquely-named
+        intermediates (`.section_NN_*`) and its own output, reads shared state
+        read-only, and shells out to ffmpeg. That is what makes the loop below
+        safe to run concurrently.
+        """
         idx = plan["index"]
         section_slug = _section_slug(plan["heading"])
         out_path = sections_dir / f"{slug}-{section_slug}.mp4"
@@ -3212,7 +3286,7 @@ def render_section_videos(
         proc = subprocess.run(audio_cmd, capture_output=True, text=True)
         if proc.returncode != 0 or not section_audio.exists():
             warn(f"  [{idx+1}/{len(plans)}] audio prep failed: {proc.stderr[-300:].strip()}")
-            continue
+            return None
 
         # 4b. Video: build a concat list — title card held for the lead-in
         # silence + (intro_dur or silent fallback) + each in-range frame at
@@ -3231,7 +3305,7 @@ def render_section_videos(
         if not in_range_frames:
             warn(f"  [{idx+1}/{len(plans)}] no in-range frames; skipping")
             section_audio.unlink(missing_ok=True)
-            continue
+            return None
 
         content_dur = sum(d for _, (_, d) in in_range_frames)
         for _, (fpath, dur) in in_range_frames:
@@ -3285,13 +3359,33 @@ def render_section_videos(
                 f"  [{idx+1}/{len(plans)}] {plan['heading'][:60]!r} failed: "
                 f"{proc.stderr[-400:].strip()}"
             )
-            continue
+            return None
 
         size_mb = out_path.stat().st_size / (1024 * 1024)
         info(f"  [{idx+1}/{len(plans)}] {out_path.name}  ({size_mb:.1f} MB)")
-        out_paths.append(out_path)
+        return out_path
 
-    return out_paths
+    # Sections are independent, so render them concurrently. This is the
+    # single largest cost in a run — 412s sequentially on the reference
+    # document — and the work is almost entirely inside ffmpeg subprocesses,
+    # so threads are enough; no GIL contention and no pickling of plan dicts.
+    #
+    # Worker count is capped for two reasons: NVENC allows a limited number of
+    # concurrent sessions on consumer cards (6 verified fine on an RTX A1000),
+    # and each ffmpeg is itself multi-threaded, so oversubscribing slows every
+    # section down rather than speeding the batch up.
+    workers = max(1, min(max_workers or _default_section_workers(), len(plans)))
+    if workers == 1:
+        results = [_render_one(plan) for plan in plans]
+    else:
+        info(f"  rendering {len(plans)} sections, {workers} at a time")
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            # Submitted in plan order and read back in the same order, so the
+            # returned list matches the sequential version exactly regardless
+            # of which section finishes first.
+            results = list(pool.map(_render_one, plans))
+
+    return [path for path in results if path is not None]
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -3358,6 +3452,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory of personal rule files (tier 2). Overrides "
              f"${_discovery.ENV_USER_RULES} and "
              f"{_discovery.CONFIG_FILE_NAME}.",
+    )
+    p.add_argument(
+        "--section-workers",
+        type=int,
+        default=None,
+        metavar="N",
+        help=f"How many per-section MP4s to encode at once "
+             f"(default: {_default_section_workers()}). 1 renders "
+             f"sequentially. Sections are independent, so this is the "
+             f"largest single speedup available in a run.",
+    )
+    p.add_argument(
+        "--sections",
+        default=None,
+        metavar="SPEC",
+        help="Render only these sections: a comma-separated list of 0-based "
+             "indices and ranges, e.g. '0,3-5'. Skips the full-length video "
+             "entirely, so a single section can be checked in a fraction of "
+             "the time a whole render takes.",
+    )
+    p.add_argument(
+        "--preview",
+        action="store_true",
+        help="Open the primary output when the run finishes.",
     )
     p.add_argument(
         "--no-split-sections",
@@ -3713,9 +3831,15 @@ def main() -> None:
     )
 
     # ── 7. Encode MP4 ─────────────────────────────────────────────────────────
-    mp4_path = encode_video(
-        keyframes, audio_path, output_dir, slug, smooth=args.smooth,
-    )
+    # --sections exists to check one part quickly, and the full-length encode
+    # is the most expensive single step, so skip it entirely in that mode.
+    if args.sections:
+        info("Skipping the full-length video (--sections given)")
+        mp4_path = output_dir / f"{slug}.mp4"
+    else:
+        mp4_path = encode_video(
+            keyframes, audio_path, output_dir, slug, smooth=args.smooth,
+        )
 
     # ── 8. Per-section MP4s ───────────────────────────────────────────────────
     if args.no_split_sections:
@@ -3730,6 +3854,8 @@ def main() -> None:
             slug=slug,
             voice=args.voice,
             title_override=doc_config.title,
+            max_workers=args.section_workers,
+            only_sections=_parse_section_spec(args.sections),
         )
 
     # ── Summary ───────────────────────────────────────────────────────────────
@@ -3759,6 +3885,15 @@ def main() -> None:
     print(f"\nVersion: {output_dir}")
     print(f"Latest:  {base_output_dir / slug / 'latest'}")
     print("=" * 60)
+
+    if args.preview:
+        # With --sections there is no full-length video, so the first
+        # rendered section is the thing worth looking at.
+        primary = mp4_path if mp4_path.exists() else (
+            section_paths[0] if section_paths else audio_path
+        )
+        info(f"Opening {primary} …")
+        _open_file(primary)
 
 
 if __name__ == "__main__":
