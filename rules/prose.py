@@ -8,7 +8,7 @@ buffer. Do not sort, dedupe, or reorder this list.
 
 The regex-based counterparts (_fix_retryable, _fix_transient, _fix_enum,
 _force_verb_stress_heteronyms, and the emphasis/range passes) still live in
-html_to_video.py, where the 12-step `rewrite_for_tts` sequence orders them.
+narraoke.py, where the 12-step `rewrite_for_tts` sequence orders them.
 Moving those is a later step: they are functions with their own hand-tuned
 ordering, not data.
 """
@@ -36,7 +36,7 @@ LITERALS: list[tuple[str, str]] = [
     # — no one says "the manager DEL-uh-gits the work". Defaulting to the verb
     # is therefore the safer error in a document we have not seen.
     ("delegates", "[delegates](/dˈɛləɡˌeɪts/)"),
-    # "enum" / "enums" — see _fix_enum in html_to_video.py for the regex form
+    # "enum" / "enums" — see _fix_enum in narraoke.py for the regex form
     # (needed to avoid touching "enumerate" and to prevent cascading on the
     # plural).
 ]

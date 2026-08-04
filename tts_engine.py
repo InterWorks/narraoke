@@ -17,9 +17,9 @@ from utils import info, warn, step
 
 KOKORO_HF_REPO = "hexgrad/Kokoro-82M"
 
-# Kokoro synthesis rate. Rebound by html_to_video from the document's
+# Kokoro synthesis rate. Rebound by narraoke from the document's
 # `.video.json` before synthesis starts. This value was previously written out
-# twice — here and in html_to_video — so changing narration speed meant knowing
+# twice — here and in narraoke — so changing narration speed meant knowing
 # about both places; docconfig is now the single source of truth.
 NARRATION_SPEED = DEFAULT_NARRATION_SPEED
 

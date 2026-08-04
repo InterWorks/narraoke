@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
-# These are the values that were hardcoded in html_to_video.py. Changing one
+# These are the values that were hardcoded in narraoke.py. Changing one
 # here changes the default for every document; changing it in a document's
 # .video.json changes it for that document only.
 
@@ -166,7 +166,7 @@ def load(md_path: Path, explicit: Path | None = None) -> tuple[DocConfig, list[s
 
     `explicit` overrides the auto-discovered companion path.
     """
-    from html_to_video import _strip_jsonc_comments  # local: avoids a cycle
+    from narraoke import _strip_jsonc_comments  # local: avoids a cycle
 
     path = explicit or config_path_for(md_path)
     if not path.is_file():

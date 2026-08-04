@@ -16,7 +16,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 sys.argv = ["pytest"]
 
-import html_to_video as h  # noqa: E402
+import narraoke as h  # noqa: E402
 
 
 # ── --sections parsing ───────────────────────────────────────────────────────

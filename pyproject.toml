@@ -21,7 +21,7 @@ dependencies = [
     "pydub>=0.25.1",
     "Pillow>=10.0.0",
     "torch>=2.3.0",
-    # Imported directly (html_to_video.py, tts_engine.py) but previously
+    # Imported directly (narraoke.py, tts_engine.py) but previously
     # undeclared — both resolved transitively by luck. Declared explicitly so
     # an upstream change cannot drop them silently.
     "numpy>=1.24",
@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The article path (article_to_video.py, extractor.py, video_gen.py) fetches
+# The article path (narraoke_article.py, extractor.py, video_gen.py) fetches
 # and extracts web articles, which needs a heavier dependency set than the
 # document path. Optional so that rendering a local markdown file — the common
 # case — does not pull in an HTML-extraction stack.
@@ -57,21 +57,21 @@ dev = [
 # renders text onto generated frames — no browser involved.
 #
 # See the auto-detection issue for the eventual single-entry-point design.
-narraoke = "html_to_video:main"
-narraoke-article = "article_to_video:main"
+narraoke = "narraoke:main"
+narraoke-article = "narraoke_article:main"
 
 [tool.setuptools]
 # Mostly a flat single-module layout — these are modules, not a package. The
-# original `packages.find` matched an `article_to_video*` package directory
-# that does not exist, so no .py file was actually packaged and the installed
-# console script would have failed on import.
+# original `packages.find` matched a package directory that never existed, so
+# no .py file was actually packaged and the installed console script would
+# have failed on import.
 py-modules = [
-    "html_to_video",
+    "narraoke",
     "docconfig",
     "tts_engine",
     "timing",
     "utils",
-    "article_to_video",
+    "narraoke_article",
     "extractor",
     "video_gen",
 ]

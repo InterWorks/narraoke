@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run python
 """
-article_to_video — Narrate plain prose: a URL, a text file, or pasted input.
+narraoke_article — Narrate plain prose: a URL, a text file, or pasted input.
 
 One of two entry points, distinguished by how the source is rendered:
 
@@ -8,7 +8,7 @@ One of two entry points, distinguished by how the source is rendered:
     strips a web article, or reads a text file, then draws the text onto
     generated frames with PIL. No browser, and no assumptions about document
     structure.
-  * `html_to_video.py` handles **richly formatted documents**: markdown with
+  * `narraoke.py` handles **richly formatted documents**: markdown with
     known structure, rendered as styled HTML and screenshotted by a headless
     browser so code blocks, tables, and typography survive.
 

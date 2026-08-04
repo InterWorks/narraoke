@@ -17,7 +17,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 sys.argv = ["pytest"]
 
 import docconfig  # noqa: E402
-import html_to_video as h  # noqa: E402
+import narraoke as h  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

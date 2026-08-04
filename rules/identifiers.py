@@ -6,7 +6,7 @@ Everything that used to live here was either a pattern hiding inside a
 hardcoded enumeration, or a fact about one document:
 
   * `custom_id` / `customer_id` / `order_id` / `session_id` — four instances of
-    a general pattern, now `_spell_out_id_suffix` in html_to_video.py:
+    a general pattern, now `_spell_out_id_suffix` in narraoke.py:
     `\\b(\\w+)_id\\b` -> `\\1 I.D.`. The regex covers any `*_id` identifier,
     including ones no document has used yet.
   * `isRetryable` / `isError` — camelCase splits. Both are tier 1: they name

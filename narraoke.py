@@ -1,13 +1,13 @@
 #!/usr/bin/env -S uv run python
 """
-html_to_video — Turn a structured markdown doc into a narrated, scrolling video.
+narraoke — Turn a structured markdown doc into a narrated, scrolling video.
 
 One of two entry points, distinguished by how the source is rendered:
 
   * this module renders **richly formatted documents**. The markdown becomes
     styled HTML, which a headless browser screenshots, so code blocks, tables,
     and typography survive into the video.
-  * `article_to_video.py` handles **plainer prose** — a URL, a text file, or
+  * `narraoke_article.py` handles **plainer prose** — a URL, a text file, or
     pasted input — and draws the text onto generated frames with PIL. No
     browser, and no assumptions about document structure.
 
@@ -39,7 +39,7 @@ Usage
 
 Equivalently, without the console script:
 
-  uv run python html_to_video.py <markdown-path> [options]
+  uv run python narraoke.py <markdown-path> [options]
 """
 from __future__ import annotations
 

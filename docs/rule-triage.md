@@ -164,7 +164,7 @@ to `tests/fixtures/02-ordering-longer-first.out.txt`.
 
 Tier 4 stays **Python source** — that is the structural leak control. Adding a
 sensitive rule requires editing code and passing review, which a config tweak
-never does. But the rules move out of `html_to_video.py` into a `rules/`
+never does. But the rules move out of `narraoke.py` into a `rules/`
 package, split by the defect each one fixes:
 
 | Module | Holds | Count |

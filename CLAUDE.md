@@ -26,15 +26,15 @@ stay harmless.
 
 ## Two entry points live here
 
-`html_to_video.py` (`narraoke`) handles **richly formatted documents**:
+`narraoke.py` (`narraoke`) handles **richly formatted documents**:
 structured markdown, rendered as styled HTML and screenshotted by a headless
-browser. `article_to_video.py` (`narraoke-article`, + `extractor.py` and
+browser. `narraoke_article.py` (`narraoke-article`, + `extractor.py` and
 `video_gen.py`) handles **plainer prose** — a URL, a text file, or pasted
 input — behind the `article` optional-dependency extra.
 
 **Neither supersedes the other.** They take different inputs and use
-incompatible renderers: `html_to_video` screenshots styled HTML through a
-headless browser so code blocks and tables survive; `article_to_video` draws
+incompatible renderers: `narraoke` screenshots styled HTML through a
+headless browser so code blocks and tables survive; `narraoke_article` draws
 text onto blank frames with PIL, which is what lets it work on input that has
 no structure to preserve. Both share `utils`, `tts_engine`, and `timing`.
 

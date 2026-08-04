@@ -9,7 +9,7 @@ Why this suite exists
 The rule lists are hand-ordered and the order is *semantics*, not style:
 `_apply_literal_overrides` is a sequential `str.replace` over a mutating
 buffer, so a rule whose `from` is a substring of a later rule's `from` will
-consume it first. The inline comments in html_to_video.py ("longer first",
+consume it first. The inline comments in narraoke.py ("longer first",
 "Order matters") are load-bearing assertions that had no test behind them.
 These tests are that missing check.
 
@@ -28,7 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 sys.argv = ["pytest"]
 
-import html_to_video as h  # noqa: E402
+import narraoke as h  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -169,7 +169,7 @@ def test_dotfile_anchoring_leaves_compounds_alone() -> None:
     but `_spell_out_dotted_names` runs afterwards and narrates it as an
     ordinary dotted name ("/foo dot env"). Only `.envrc` survives both.
 
-    The comment at html_to_video.py:884 claims `/foo.env` "stays untouched",
+    The comment at narraoke.py:884 claims `/foo.env` "stays untouched",
     which is true of that rule in isolation and false of the pipeline. See
     the note in docs/PLAN.md follow-ups; recorded here as current behaviour.
     """

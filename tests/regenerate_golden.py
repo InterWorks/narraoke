@@ -22,10 +22,10 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-# html_to_video parses sys.argv at import time in some paths; neutralise it.
+# narraoke parses sys.argv at import time in some paths; neutralise it.
 sys.argv = ["regenerate_golden"]
 
-import html_to_video as h  # noqa: E402
+import narraoke as h  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

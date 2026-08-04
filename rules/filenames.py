@@ -16,7 +16,7 @@ LITERALS: list[tuple[str, str]] = [
     ("lockfile", "lock file"),
     # Hidden dotted config files (`.claude.json`, `.mcp.json`, `~/.claude.json`)
     # used to be three literals here. They are now handled generically by
-    # `_spell_out_hidden_dotted_names` in html_to_video.py, which also covers
+    # `_spell_out_hidden_dotted_names` in narraoke.py, which also covers
     # `.eslintrc.json`, `.prettierrc.json`, and any other hidden config file,
     # and narrates a `~/` prefix as the word "home".
 ]

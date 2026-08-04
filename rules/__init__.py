@@ -19,7 +19,7 @@ today, and both are contained inside a single module by design:
   * `Invalid JSON` before `JSON`            (initialisms)
   * `~/.claude.json` before `.claude.json`  (filenames)
 
-Verified exhaustively when the rules were split out of html_to_video.py: every
+Verified exhaustively when the rules were split out of narraoke.py: every
 rule in isolation, all 756 ordered pairs, all 756 tight concatenations, and
 3000 random multi-rule sentences produce byte-identical output under this
 grouped order and the original interleaved one. No interaction crosses a module
@@ -33,7 +33,7 @@ from . import filenames, identifiers, initialisms, prose, versions
 # The application order of the rule modules. This list — not the import
 # statement above — is what defines rule precedence.
 #
-# The original flat list in html_to_video.py interleaved these groups; that
+# The original flat list in narraoke.py interleaved these groups; that
 # interleaving was incidental, not load-bearing (see the module docstring for
 # the equivalence proof). Grouping is what makes the rules navigable.
 ORDERED_RULE_SOURCES: tuple[str, ...] = (

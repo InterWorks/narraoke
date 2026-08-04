@@ -2,7 +2,7 @@
 
 This module is intentionally empty of literals.
 
-Version numbers are now handled by two patterns in html_to_video.py rather
+Version numbers are now handled by two patterns in narraoke.py rather
 than an enumeration:
 
   * `_spell_out_versions` — any `X.Y.Z` with three or more integer

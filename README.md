@@ -346,15 +346,15 @@ silently drop TTS to the 160x-slower CPU path without failing any test.
 
 ```
 narraoke/
-├── html_to_video.py   # Rich documents — CLI entry point (`narraoke`)
-├── article_to_video.py # Plain prose — CLI entry point (`narraoke-article`)
-├── extractor.py       #   its URL fetching + boilerplate stripping
-├── video_gen.py       #   its PIL text-frame renderer
-├── docconfig.py       # Per-document render settings
-├── rules/             # Tier-4 pronunciation rules + the tier stack
-├── tts_engine.py      # Kokoro TTS synthesis          (shared)
-├── timing.py          # Phrase timing + SRT/JSON output (shared)
-├── utils.py           # Slugify, ffmpeg checks, logging (shared)
+├── narraoke.py          # Rich documents  → the `narraoke` command
+├── narraoke_article.py  # Plain prose     → the `narraoke-article` command
+│   ├── extractor.py     #   URL fetching + boilerplate stripping
+│   └── video_gen.py     #   PIL text-frame renderer
+├── docconfig.py         # Per-document render settings
+├── rules/               # Tier-4 pronunciation rules + the tier stack
+├── tts_engine.py        # Kokoro TTS synthesis            (shared)
+├── timing.py            # Phrase timing + SRT/JSON output (shared)
+├── utils.py             # Slugify, ffmpeg checks, logging (shared)
 ├── scripts/
 │   └── leak_scan.py   # Raw-bytes denylist scan for confidential material
 ├── tests/             # Golden-file tests for the rule pipeline
@@ -364,12 +364,29 @@ narraoke/
 ├── .mise.toml         # Toolchain pins (uv, python) + render/test/lint tasks
 ├── renovate.json      # Dependency automation
 ├── pyproject.toml     # Project metadata + uv config
-└── uv.lock            # Pinned versions + sha256 hashes (source of truth)
+└── uv.lock              # Pinned versions + sha256 hashes (source of truth)
+```
+
+The `narraoke` and `narraoke-article` commands used throughout this README are
+console scripts, declared in `pyproject.toml`:
+
+```toml
+[project.scripts]
+narraoke = "narraoke:main"
+narraoke-article = "narraoke_article:main"
+```
+
+`uv sync` generates a small launcher for each that calls `main()` in the named
+module — so `uv run narraoke` runs `narraoke.py`. Running the module directly
+works too and skips the launcher:
+
+```bash
+uv run python narraoke.py <markdown-path>
 ```
 
 ### The article path
 
-`article_to_video.py` (with `extractor.py` and `video_gen.py`) narrates
+`narraoke_article.py` (with `extractor.py` and `video_gen.py`) narrates
 **plainer prose** from anywhere — a URL, a text file, or pasted input:
 
 ```bash
