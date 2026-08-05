@@ -1050,6 +1050,22 @@ def _fix_transient(text: str) -> str:
     return pat.sub(r"[\1](/tɹˈænziənt/)", text)
 
 
+def _fix_copied(text: str) -> str:
+    """Wrap "copied" in an IPA escape so Kokoro reads "COP-eed" instead of
+    splitting the "-ied" into a spurious extra syllable ("cop-ih-ed").
+
+    Whole-word boundary, and that boundary is load-bearing rather than
+    stylistic: misaki phonemizes a mid-word escape to nothing, so the literal
+    form of this rule turned "uncopied" into "un[copied](/…/)" and lost the
+    word. Prefixed forms are left to Kokoro, which reads them correctly.
+
+    Case-insensitive for headings and table cells; negative lookahead guards
+    against double-wrapping.
+    """
+    pat = re.compile(r"\b(copied)\b(?!\]\(/)", re.IGNORECASE)
+    return pat.sub(r"[\1](/kˈɒpid/)", text)
+
+
 def _fix_retryable(text: str) -> str:
     """Wrap "retryable" / "retriable" (and their "-bility" noun forms) in IPA
     escapes so Kokoro reads them as "re-TRY-uh-bul" / "re-try-uh-BIL-ity"
@@ -1397,6 +1413,9 @@ def rewrite_for_tts(text: str) -> str:
     text = _fix_retryable(text)
     text = _fix_transient(text)
     text = _fix_enum(text)
+    # Independent of its neighbours: "copied" shares no prefix with any other
+    # rule's pattern, so this sits with the word-level IPA fixes.
+    text = _fix_copied(text)
     text = _spell_out_vs(text)
     # Hidden dotted names first: ".claude.json" must be claimed as a whole
     # before _spell_out_dotfiles or _spell_out_dotted_names see part of it.

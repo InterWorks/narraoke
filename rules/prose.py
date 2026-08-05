@@ -23,6 +23,9 @@ LITERALS: list[tuple[str, str]] = [
     # Kokoro drops the "-ed" on "hijacked" (renders as "hijack"). Force the
     # past-tense form via IPA so the final syllable is audible.
     ("hijacked", "[hijacked](/hˈIʤˌæktɪd/)"),
+    # "copied" — see _fix_copied in narraoke.py for the regex form. It needs
+    # a word boundary: a mid-word escape like "un[copied](/…/)" fails to
+    # phonemize entirely, so a bare literal would break "uncopied".
     # "delegates" — Kokoro picks the NOUN pronunciation "DEL-uh-gits"
     # (the people) instead of the VERB "DEL-uh-GAYTS" (the action). Force
     # verb stress with an IPA escape. Only the inflected verb form needs

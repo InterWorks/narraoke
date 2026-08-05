@@ -142,6 +142,7 @@ def test_regex_rules_do_not_double_wrap_ipa() -> None:
         (h._fix_retryable, "A retryable error occurred."),
         (h._fix_transient, "A transient failure occurred."),
         (h._fix_enum, "The enum value is set."),
+        (h._fix_copied, "The file was copied."),
         (h._force_verb_stress_heteronyms, "The delegates delegate work."),
     ]:
         once = fn(sample)
@@ -150,6 +151,30 @@ def test_regex_rules_do_not_double_wrap_ipa() -> None:
             f"{fn.__name__} rewrapped its own output — the (?!\\]\\(/) guard "
             f"is missing or ineffective:\n  once:  {once!r}\n  twice: {twice!r}"
         )
+
+
+def test_copied_gets_a_single_final_syllable() -> None:
+    """Kokoro splits "-ied" into "cop-ih-ed"; the escape forces "COP-eed"."""
+    out = h.rewrite_for_tts("The file was copied to the cache.")
+    assert "[copied](/kˈɒpid/)" in out
+
+
+def test_copied_is_word_bounded_so_prefixed_forms_survive() -> None:
+    """The boundary is load-bearing, not stylistic.
+
+    This rule started life as a plain literal, which rewrote "uncopied" to
+    "un[copied](/…/)". misaki phonemizes a mid-word escape to nothing, so the
+    literal form silently destroyed the word instead of fixing it. Kokoro
+    reads the prefixed forms correctly on its own, so they are left alone.
+    """
+    for word in ("uncopied", "recopied"):
+        assert h.rewrite_for_tts(word) == word
+
+
+def test_copied_does_not_touch_other_inflections() -> None:
+    """Only the "-ied" form is defective; "copies"/"copy" are already right."""
+    for word in ("copies", "copy", "copying"):
+        assert h.rewrite_for_tts(word) == word
 
 
 def test_ranges_expand_inside_quotes() -> None:

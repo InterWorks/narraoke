@@ -63,6 +63,7 @@ in the public package.
 | `TODO` → `to do` | nowhere | All-caps spells letter-by-letter. Universal convention; keep despite no hit — see note below |
 | `FIXME` → `fix me` | nowhere | Same as `TODO` |
 | `hijacked` → IPA | onboarding ×1 | Kokoro drops the "-ed" — a defect, not a topic choice |
+| `_fix_copied` | — | Kokoro splits "-ied" into "cop-ih-ed" — same defect class as `hijacked`. Regex, not a literal: a mid-word escape fails to phonemize, so it must not fire inside "uncopied" |
 | `_fix_retryable` | exam ×4 | Pure pattern, no literals |
 | `_fix_transient` | exam ×7 | Pure pattern |
 | `_fix_enum` | exam ×4 | Pure pattern; conditional logic keeps it as reviewed code |
