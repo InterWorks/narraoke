@@ -173,7 +173,8 @@ package, split by the defect each one fixes:
 | `rules/initialisms.py` | `SHA`, `uvx`, `TODO`, `FIXME`, `Invalid JSON`, `JSON`, `YAML` | 7 |
 | `rules/filenames.py` | `lockfile`, the dotted-config literals, `_spell_out_dotfiles`, `_spell_out_dotted_names` | 4 + regexes |
 | `rules/identifiers.py` | `KEY=value`, the `*_id` family, `isRetryable`, `isError` | 7 |
-| `rules/prose.py` | `past-you` family, `hijacked`, plus the heteronym and emphasis regexes | 5 + regexes |
+| `rules/prose.py` | `past-you` family, `hijacked`, `delegates` | 5 |
+| `rules/passes.py` | pattern passes needing real Python: `_fix_retryable`, `_fix_transient`, `_fix_enum`, `_fix_copied`, the verb-stress heteronyms | 5 passes |
 | `rules/versions.py` | `4.28.1`, `4.x`, `^4.0` — all leaving for tier 1 anyway | 3 → 0 |
 
 (`TTL` and `XSS` appear in no module — they leave for tier 3b.)

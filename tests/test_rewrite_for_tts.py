@@ -428,6 +428,27 @@ def test_every_rule_module_is_assembled() -> None:
         "unassembled (its rules never fire) or named but missing."
     )
 
+    # Every literal-bearing module in rules/ must be assembled. `passes` and
+    # the infrastructure modules carry no LITERALS and are exempt — but the
+    # check is on the *directory*, so a new rule module left out of
+    # ORDERED_RULE_SOURCES is caught rather than merely being absent from
+    # _MODULES too.
+    import importlib
+
+    on_disk = {
+        p.stem for p in Path(rules.__file__).parent.glob("*.py")
+        if p.stem not in ("__init__", "stack", "discovery", "passes")
+    }
+    literal_bearing = {
+        name for name in on_disk
+        if hasattr(importlib.import_module(f"rules.{name}"), "LITERALS")
+    }
+    assert literal_bearing <= set(rules.ORDERED_RULE_SOURCES), (
+        "a literal-bearing module in rules/ is missing from "
+        f"ORDERED_RULE_SOURCES, so its rules never fire: "
+        f"{sorted(literal_bearing - set(rules.ORDERED_RULE_SOURCES))}"
+    )
+
 
 def test_interacting_rules_share_a_module() -> None:
     """No substring interaction may cross a module boundary.

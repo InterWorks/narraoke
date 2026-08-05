@@ -628,34 +628,9 @@ def _expand_numeric_ranges(text: str) -> str:
     return re.sub(r"(\d+)\s*[-–—]\s*(\d+)", r"\1 to \2", text)
 
 
-# Heteronyms that Kokoro stresses as a noun by default but read as a verb in
-# this doc. Capitalisation (or coming right after a colon/heading lead-in)
-# biases the noun reading; mid-sentence lowercase "records" already renders
-# correctly. Use misaki's native verb phonemization so it matches the prosody
-# of unaltered mid-sentence "records" elsewhere in the audio.
-#   ɹəkˈɔɹdz = "re-CORDS" (verb, matches misaki's natural mid-sentence rendering)
-#   ɹˈɛkəɹdz = "RE-cords" (noun — what we're overriding)
-_RECORDS_VERB_IPA = "/ɹəkˈɔɹdz/"
-
-
-def _force_verb_stress_heteronyms(text: str) -> str:
-    """Apply IPA escapes for heteronyms Kokoro mis-stresses.
-
-    Targets "Records" (capital R), which biases Kokoro toward the noun form
-    regardless of mid-sentence position. Specifically fires at: start of
-    string, after `.!?` + space, after a numbered-list marker (`1. `), or
-    after a colon + space (the "verb-list lead-in" pattern: "..., which:
-    Records ...").
-
-    Mid-sentence lowercase "records" already renders correctly via Kokoro's
-    own context handling, so we leave it untouched.
-    """
-    return re.sub(
-        r"(^|[.!?]\s|^\d+\.\s|\n\d+\.\s|:\s)Records\b",
-        lambda m: f"{m.group(1)}[Records]({_RECORDS_VERB_IPA})",
-        text,
-        flags=re.MULTILINE,
-    )
+# Moved to `rules/passes.py` (registered as the "verb-stress-heteronyms"
+# pass). The alias keeps the established private name working.
+_force_verb_stress_heteronyms = rules.passes.force_verb_stress_heteronyms
 
 
 # Generic literal-phrase overrides — apply to ANY narrated markdown doc.
@@ -1034,71 +1009,14 @@ def _spell_out_vs(text: str) -> str:
     return re.sub(r"\bvs\b\.?", "versus", text)
 
 
-def _fix_enum(text: str) -> str:
-    """Wrap "enum"/"enums" in an IPA escape so Kokoro reads them with
-    first-syllable stress ("EE-num") instead of "in-UM".
-
-    Whole-word boundary so substrings like "enumerate" are left alone, and a
-    negative lookahead so the literal-override pass can't double-wrap.
-    """
-    def repl(m: re.Match) -> str:
-        word = m.group(1)
-        ipa = "/ˈinʌmz/" if word.endswith("s") else "/ˈinʌm/"
-        return f"[{word}]({ipa})"
-    return re.compile(r"\b(enums?)\b(?!\]\(/)").sub(repl, text)
-
-
-def _fix_transient(text: str) -> str:
-    """Wrap "transient" in an IPA escape so Kokoro reads "TRAN-zee-ent"
-    (standard American) instead of "TRAN-chent". Case-insensitive so
-    "Transient" in headings/table cells gets the same treatment. Negative
-    lookahead guards against double-wrapping.
-    """
-    pat = re.compile(r"\b(transient)\b(?!\]\(/)", re.IGNORECASE)
-    return pat.sub(r"[\1](/tɹˈænziənt/)", text)
-
-
-def _fix_copied(text: str) -> str:
-    """Wrap "copied" in an IPA escape so Kokoro reads "COP-eed" instead of
-    splitting the "-ied" into a spurious extra syllable ("cop-ih-ed").
-
-    Whole-word boundary, and that boundary is load-bearing rather than
-    stylistic: misaki phonemizes a mid-word escape to nothing, so the literal
-    form of this rule turned "uncopied" into "un[copied](/…/)" and lost the
-    word. Prefixed forms are left to Kokoro, which reads them correctly.
-
-    Case-insensitive for headings and table cells; negative lookahead guards
-    against double-wrapping.
-    """
-    pat = re.compile(r"\b(copied)\b(?!\]\(/)", re.IGNORECASE)
-    return pat.sub(r"[\1](/kˈɒpid/)", text)
-
-
-def _fix_retryable(text: str) -> str:
-    """Wrap "retryable" / "retriable" (and their "-bility" noun forms) in IPA
-    escapes so Kokoro reads them as "re-TRY-uh-bul" / "re-try-uh-BIL-ity"
-    instead of "re-TREE-uh-bul" / "re-tree-uh-BIL-ity".
-
-    Anchored with `\\b` so it only fires on whole-word matches, and a negative
-    lookahead guards against double-wrapping if the literal-override pass has
-    already produced an IPA-escaped form earlier. Case-insensitive so table
-    headers like "Retryable" get the same treatment.
-    """
-    # Order matters: longer noun forms first so the bare "retryable" rule
-    # doesn't partially match inside "retryability".
-    text = re.sub(
-        r"\b(retryability|retriability)\b(?!\]\(/)",
-        r"[\1](/ɹitɹˌaɪəbˈɪlɪti/)",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r"\b(retryable|retriable)\b(?!\]\(/)",
-        r"[\1](/ɹitɹˈaɪəbəl/)",
-        text,
-        flags=re.IGNORECASE,
-    )
-    return text
+# The word-level IPA passes formerly defined here now live in
+# `rules/passes.py`, registered in `passes.ORDERED_PASSES` and applied by
+# stage. These aliases keep the established private names working for callers
+# and tests; the behaviour is identical.
+_fix_enum = rules.passes.fix_enum
+_fix_transient = rules.passes.fix_transient
+_fix_copied = rules.passes.fix_copied
+_fix_retryable = rules.passes.fix_retryable
 
 
 def _apply_literal_overrides(text: str) -> str:
@@ -1418,12 +1336,12 @@ def rewrite_for_tts(text: str) -> str:
     text = _spell_out_versions(text)
     text = _spell_out_assignments(text)
     text = _spell_out_id_suffix(text)
-    text = _fix_retryable(text)
-    text = _fix_transient(text)
-    text = _fix_enum(text)
-    # Independent of its neighbours: "copied" shares no prefix with any other
-    # rule's pattern, so this sits with the word-level IPA fixes.
-    text = _fix_copied(text)
+    # Tier-4 word-level IPA passes, in the order declared by
+    # rules/passes.ORDERED_PASSES. Adding one is a registration there, not an
+    # edit here — but the *stage's* position in this sequence is still
+    # hand-tuned and load-bearing: it runs after the version/identifier passes
+    # and before the dotted-name passes.
+    text = rules.apply_passes(text, "word_ipa")
     text = _spell_out_vs(text)
     # Hidden dotted names first: ".claude.json" must be claimed as a whole
     # before _spell_out_dotfiles or _spell_out_dotted_names see part of it.
@@ -1433,7 +1351,9 @@ def rewrite_for_tts(text: str) -> str:
     text = _expand_numeric_ranges(text)
     text = _emphasise_quoted_spans(text)
     text = _emphasise_parentheticals(text)
-    text = _force_verb_stress_heteronyms(text)
+    # Tier-4 passes that must see the emphasised form (quote and paren
+    # wrapping insert punctuation their anchors match against).
+    text = rules.apply_passes(text, "emphasis")
     # Data-driven regexes, stage 2: after every built-in pattern rule, for
     # rules that need to see their output.
     text = _RULE_STACK.apply_regexes(text, "post")

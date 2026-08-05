@@ -28,7 +28,7 @@ module, that guarantee no longer holds — keep interacting rules together.
 """
 from __future__ import annotations
 
-from . import filenames, identifiers, initialisms, prose, versions
+from . import filenames, identifiers, initialisms, passes, prose, versions
 
 # The application order of the rule modules. This list — not the import
 # statement above — is what defines rule precedence.
@@ -70,8 +70,21 @@ LITERAL_TTS_OVERRIDES: list[tuple[str, str]] = _assemble_literals()
 # by the flat literal pass.
 DOTFILE_NARRATION: list[tuple[str, str]] = filenames.DOTFILE_NARRATION
 
+# Tier-4 pattern passes: rules needing real Python (word boundaries,
+# conditional replacements) rather than a `from`/`to` pair. Registered in
+# `passes.ORDERED_PASSES` and applied by stage, so adding one does not mean
+# editing `rewrite_for_tts`.
+PASS_STAGES: tuple[str, ...] = passes.PASS_STAGES
+ORDERED_PASSES: tuple[passes.Pass, ...] = passes.ORDERED_PASSES
+apply_passes = passes.apply_passes
+passes_for = passes.passes_for
+
 __all__ = [
     "LITERAL_TTS_OVERRIDES",
     "DOTFILE_NARRATION",
     "ORDERED_RULE_SOURCES",
+    "PASS_STAGES",
+    "ORDERED_PASSES",
+    "apply_passes",
+    "passes_for",
 ]
