@@ -309,6 +309,12 @@ def load_narration_blocks(
                 # Closing fence — emit the summary (narration) + the code
                 # (visual) as two blocks, in that order.
                 in_code_fence = False
+                # `authored` records whether a human wrote this summary or the
+                # generic fallback filled in. The distinction is invisible once
+                # the text exists, but it is the difference between narration
+                # that explains the code and narration that announces it, so
+                # `_check_code_summaries` reports the fallbacks.
+                authored = pending_tts_summary is not None
                 summary_text = pending_tts_summary or _default_code_summary(code_fence_lang)
                 pending_tts_summary = None
                 code_text = "\n".join(code_fence_buf)
@@ -317,6 +323,8 @@ def load_narration_blocks(
                     "text": summary_text,
                     "depth": 0,
                     "tts_summary_for_code": True,
+                    "authored_summary": authored,
+                    "code_lang": code_fence_lang,
                 })
                 blocks.append({
                     "kind": "code",
@@ -2214,6 +2222,39 @@ def _check_phrase_coverage(
     ]
 
 
+def _check_code_summaries(annotated_blocks: list[dict]) -> list[str]:
+    """Report code blocks narrated by the generic fallback line.
+
+    A code block is never read out line by line. Something is narrated while
+    the camera dwells on it, and that something is either a `tts-summary`
+    comment the author wrote or `_default_code_summary`'s "A Python code block
+    follows." The render succeeds either way, which is exactly why this is
+    easy to miss: nothing fails, the video just spends the length of a code
+    block saying nothing about it.
+
+    Tables are deliberately excluded. `flush_table` builds their narration
+    from the table's own cells, so a table always has real content to speak
+    and there is no authored-versus-fallback distinction to draw.
+
+    This is advisory, not a defect report — unlike `_check_phrase_coverage`,
+    which flags phrases that genuinely break the highlight.
+    """
+    missing = [
+        block for block in annotated_blocks
+        if block.get("tts_summary_for_code") and not block.get("authored_summary")
+    ]
+    if not missing:
+        return []
+
+    langs = sorted({(b.get("code_lang") or "untagged") for b in missing})
+    return [
+        f"{len(missing)} code block(s) have no <!-- tts-summary: … --> and will "
+        f"be narrated with a generic line (\"A code block follows.\"), so the "
+        f"camera dwells on them while the audio says nothing about them. "
+        f"Languages: {', '.join(langs)}."
+    ]
+
+
 def _diagnose_dom_failure(dom: str, html_path: Path, chromium: str) -> str:
     """Explain why a DOM dump has no coordinates, as specifically as possible.
 
@@ -3907,6 +3948,11 @@ def main() -> None:
     blocks = load_narration_blocks(md_path, skip_headings=doc_config.skip_headings)
     phrases, annotated = build_phrase_index(blocks)
     info(f"  Blocks: {len(annotated)}, Narration phrases: {len(phrases)}")
+    # Advisory: code blocks falling back to generic narration. Reported here
+    # rather than after the screenshot because it depends only on the parse,
+    # and the author can act on it before spending ~16 minutes rendering.
+    for message in _check_code_summaries(annotated):
+        warn(message)
 
     # ── 2. Generate video-only HTML ───────────────────────────────────────────
     step("Rendering video HTML …")

@@ -180,6 +180,18 @@ code/table block, and the pairing resets on any other intervening block. A
 summary emitted without its visual immediately following would orphan its
 phrases — which is exactly what the new check catches.
 
+A table's summary is generated from its own cells, so it always says
+something real. A **code block's** summary has to be written by hand, as
+`<!-- tts-summary: … -->` on its own line before the fence. Omitting it is not
+an error — `_default_code_summary` falls back to "A Python code block
+follows." and the render succeeds — which is why it is easy to ship by
+accident: the camera dwells on the block for the length of a line that
+describes nothing. `_check_code_summaries` warns about those blocks (advisory,
+not a defect, unlike `_check_phrase_coverage`), and it runs right after
+parsing so the author does not spend ~16 minutes finding out. The
+`authored_summary` flag on the block records which of the two paths produced
+the text; user-facing docs are in [README.md](README.md#narrating-code-blocks-and-tables).
+
 ## Two failures that blame the wrong thing
 
 Both were found by cloning the repo fresh and rendering, which is worth doing
