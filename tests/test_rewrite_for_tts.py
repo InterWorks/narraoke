@@ -29,6 +29,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 sys.argv = ["pytest"]
 
 import narraoke as h  # noqa: E402
+from rules import passes  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -139,10 +140,11 @@ def test_regex_rules_do_not_double_wrap_ipa() -> None:
     was never designed to have.
     """
     for fn, sample in [
-        (h._fix_retryable, "A retryable error occurred."),
-        (h._fix_transient, "A transient failure occurred."),
-        (h._fix_enum, "The enum value is set."),
-        (h._force_verb_stress_heteronyms, "The delegates delegate work."),
+        (passes.fix_retryable, "A retryable error occurred."),
+        (passes.fix_transient, "A transient failure occurred."),
+        (passes.fix_enum, "The enum value is set."),
+        (passes.fix_copied, "The file was copied."),
+        (passes.force_verb_stress_heteronyms, "The delegates delegate work."),
     ]:
         once = fn(sample)
         twice = fn(once)
@@ -150,6 +152,48 @@ def test_regex_rules_do_not_double_wrap_ipa() -> None:
             f"{fn.__name__} rewrapped its own output — the (?!\\]\\(/) guard "
             f"is missing or ineffective:\n  once:  {once!r}\n  twice: {twice!r}"
         )
+
+
+def test_copied_gets_a_single_final_syllable() -> None:
+    """Kokoro splits "-ied" into "cop-ih-ed"; the escape forces "COP-eed"."""
+    out = h.rewrite_for_tts("The file was copied to the cache.")
+    assert "[copied](/kˈɑpid/)" in out
+
+
+def test_copied_uses_the_american_vowel() -> None:
+    """/ɑ/, not /ɒ/.
+
+    Both phonemize cleanly, so no smoke test distinguishes them — but the
+    pipeline runs misaki with `british=False`, and /ɒ/ is the British vowel.
+    Shipping it would put one subtly British word in an American voice.
+    """
+    out = h.rewrite_for_tts("copied")
+    assert "kˈɑpid" in out
+    assert "ɒ" not in out
+
+
+def test_copied_is_word_bounded_so_prefixed_forms_survive() -> None:
+    """The boundary is load-bearing, not stylistic.
+
+    This rule started life as a plain literal, which rewrote "uncopied" to
+    "un[copied](/…/)". misaki phonemizes a mid-word escape to nothing, so the
+    literal form silently destroyed the word instead of fixing it. Kokoro
+    reads the prefixed forms correctly on its own, so they are left alone.
+    """
+    for word in ("uncopied", "recopied", "photocopied"):
+        assert h.rewrite_for_tts(word) == word
+
+
+def test_copied_fires_across_a_hyphen() -> None:
+    """A hyphen is a word boundary, so the real word inside "hand-copied"
+    is a genuine occurrence and must still be fixed."""
+    assert "kˈɑpid" in h.rewrite_for_tts("hand-copied notes")
+
+
+def test_copied_does_not_touch_other_inflections() -> None:
+    """Only the "-ied" form is defective; "copies"/"copy" are already right."""
+    for word in ("copies", "copy", "copying"):
+        assert h.rewrite_for_tts(word) == word
 
 
 def test_ranges_expand_inside_quotes() -> None:
@@ -401,6 +445,27 @@ def test_every_rule_module_is_assembled() -> None:
     assert set(rules.ORDERED_RULE_SOURCES) == set(rules._MODULES), (
         "ORDERED_RULE_SOURCES and _MODULES disagree; a rule module is either "
         "unassembled (its rules never fire) or named but missing."
+    )
+
+    # Every literal-bearing module in rules/ must be assembled. `passes` and
+    # the infrastructure modules carry no LITERALS and are exempt — but the
+    # check is on the *directory*, so a new rule module left out of
+    # ORDERED_RULE_SOURCES is caught rather than merely being absent from
+    # _MODULES too.
+    import importlib
+
+    on_disk = {
+        p.stem for p in Path(rules.__file__).parent.glob("*.py")
+        if p.stem not in ("__init__", "stack", "discovery", "passes")
+    }
+    literal_bearing = {
+        name for name in on_disk
+        if hasattr(importlib.import_module(f"rules.{name}"), "LITERALS")
+    }
+    assert literal_bearing <= set(rules.ORDERED_RULE_SOURCES), (
+        "a literal-bearing module in rules/ is missing from "
+        f"ORDERED_RULE_SOURCES, so its rules never fire: "
+        f"{sorted(literal_bearing - set(rules.ORDERED_RULE_SOURCES))}"
     )
 
 

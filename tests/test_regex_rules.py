@@ -132,11 +132,12 @@ def test_stages_are_exactly_two() -> None:
 def test_pre_ipa_output_feeds_the_builtin_pattern_rules() -> None:
     """A pre_ipa rule runs early enough that the pattern rules see its output.
 
-    Here the rule emits "retryable", which `_fix_retryable` then wraps in IPA.
+    Here the rule emits "retryable", which the "retryable" pass then wraps in
+    IPA.
     """
     stack = _stack_with(RegexRule(pattern=r"\bRA\b", replacement="retryable"))
     out = _rewrite_with(stack, "The RA flag is set.")
-    assert "ɹitɹˈaɪəbəl" in out, "pre_ipa output should reach _fix_retryable"
+    assert "ɹitɹˈaɪəbəl" in out, "pre_ipa output should reach the retryable pass"
 
 
 def test_pre_ipa_output_does_not_reach_the_literal_pass() -> None:

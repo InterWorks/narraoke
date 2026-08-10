@@ -25,6 +25,21 @@ order comes from the explicit `ORDERED_RULE_SOURCES` list in
 `rules/__init__.py`, never from import order. Reordering imports must stay
 harmless, and a test asserts it.
 
+`rules/passes.py` follows the same principle for the tier-4 rules that need
+real Python rather than a `from`/`to` pair — a word boundary, a conditional
+replacement. Order comes from `ORDERED_PASSES`, never from definition order,
+and each pass names the *stage* it attaches to. Adding one is a registration
+there, not an edit to `rewrite_for_tts`. The stage's position within
+`rewrite_for_tts` is still hand-tuned and load-bearing; what the registry
+removes is the need to touch that sequence to add a rule.
+
+Do not confuse `PASS_STAGES` with `REGEX_STAGES` in `rules/stack.py`. The
+latter is a **public file format** for tiers 1–3 and exposes exactly two
+hooks on purpose — every hook exposed there freezes an internal pipeline step
+into a format that lives outside this repo. `PASS_STAGES` names internal
+positions for reviewed in-repo code, so it is free to grow. A test asserts
+the two vocabularies stay disjoint.
+
 ## Two entry points live here
 
 `narraoke.py` (`narraoke`) handles **richly formatted documents**:
@@ -64,7 +79,7 @@ regenerate to make a failing test pass.
 | 1 Project | one document | `<markdown>.tts-overrides.json`, beside the source |
 | 2 User | all my projects, private | any directory of `*.json`, set as `user_rules_dir` |
 | 3 Company | shared with a group | `InterWorks/narraoke-overrides` (private), path set in `narraoke.config.json` |
-| 4 Universal | everyone | Python literals in `rules/`, split by defect type |
+| 4 Universal | everyone | Python in `rules/`: literals split by defect type, plus pattern passes in `passes.py` |
 
 Tier 3 splits into **3a** (confidential — the leak-scan gate) and **3b** (org
 defaults: shared, but public technology terms). Keeping them in separate files
@@ -179,6 +194,18 @@ The unenforced invariant to watch: a summary block anchors to the *next*
 code/table block, and the pairing resets on any other intervening block. A
 summary emitted without its visual immediately following would orphan its
 phrases — which is exactly what the new check catches.
+
+A table's summary is generated from its own cells, so it always says
+something real. A **code block's** summary has to be written by hand, as
+`<!-- tts-summary: … -->` on its own line before the fence. Omitting it is not
+an error — `_default_code_summary` falls back to "A Python code block
+follows." and the render succeeds — which is why it is easy to ship by
+accident: the camera dwells on the block for the length of a line that
+describes nothing. `_check_code_summaries` warns about those blocks (advisory,
+not a defect, unlike `_check_phrase_coverage`), and it runs right after
+parsing so the author does not spend ~16 minutes finding out. The
+`authored_summary` flag on the block records which of the two paths produced
+the text; user-facing docs are in [README.md](README.md#narrating-code-blocks-and-tables).
 
 ## Two failures that blame the wrong thing
 

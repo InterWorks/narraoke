@@ -208,6 +208,68 @@ Every field is optional, and the file itself is optional — omit anything and
 the default applies. A bad value warns and falls back rather than aborting a
 16-minute render. `--video-config PATH` overrides the auto-discovered file.
 
+## Narrating code blocks and tables
+
+Code blocks and tables are **not read out line by line** — a narrator spelling
+out `uv sync --all-extras` character by character is unlistenable, and a table
+read cell by cell is worse. Instead a short summary is narrated while the
+camera holds on, or slowly scrolls through, the element itself. You hear the
+explanation and see the code at the same time.
+
+For a **table**, the summary is generated from the table's own cells
+("Columns: Type, Use it for. Row: …"), so it always has real content.
+
+For a **code block**, you write it, as an HTML comment on its own line
+immediately before the fence:
+
+````markdown
+<!-- tts-summary: This syncs every dependency group, including the article extra. -->
+```bash
+uv sync --all-extras
+```
+````
+
+The summary attaches to the next code block to close, and only that one.
+
+### If you leave it out
+
+Nothing fails. The block falls back to a generic line derived from the
+language tag — "A shell code block follows." — and the render completes
+normally. That is precisely what makes the omission easy to miss: the video
+dwells on the code for as long as the narration takes, and the narration says
+nothing about it.
+
+So the render warns:
+
+```
+⚠ 2 code block(s) have no <!-- tts-summary: … --> and will be narrated with a
+  generic line ("A code block follows."), so the camera dwells on them while
+  the audio says nothing about them. Languages: python, untagged.
+```
+
+It is **advisory** — a prompt to write a better line, not a defect. The
+warning prints straight after parsing, before TTS and before the screenshot,
+so you can fix it without waiting on a ~16-minute render.
+
+### Why summaries have no highlight
+
+A summary is audio-only: it has no `narr` span of its own, because
+highlighting prose that is not on screen would be wrong. The camera points at
+the code or table being described instead.
+
+This means **a document with tables legitimately has fewer spans than
+phrases** — the onboarding document has 1071 phrases and 1044 spans, and
+nothing is missing. An older check compared those two counts and warned on
+every render of any document containing a table. What is actually checked now
+is that every phrase resolves to *something*: its own span, or a visual it is
+anchored to. A phrase resolving to neither stalls the highlight and is a
+genuine defect.
+
+The invariant to keep in mind when authoring: a summary anchors to the code or
+table block **immediately** following it, and the pairing resets on any other
+block in between. A summary separated from its visual by a stray paragraph
+orphans its phrases.
+
 ## Pronunciation rules
 
 Kokoro mispronounces plenty of technical vocabulary. narraoke fixes this with

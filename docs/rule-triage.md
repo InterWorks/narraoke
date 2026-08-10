@@ -63,6 +63,7 @@ in the public package.
 | `TODO` → `to do` | nowhere | All-caps spells letter-by-letter. Universal convention; keep despite no hit — see note below |
 | `FIXME` → `fix me` | nowhere | Same as `TODO` |
 | `hijacked` → IPA | onboarding ×1 | Kokoro drops the "-ed" — a defect, not a topic choice |
+| `_fix_copied` | — | Kokoro splits "-ied" into "cop-ih-ed" — same defect class as `hijacked`. Regex, not a literal: a mid-word escape fails to phonemize, so it must not fire inside "uncopied". Vowel is /ɑ/ (American), not /ɒ/ (British) — both phonemize, so only a test catches it |
 | `_fix_retryable` | exam ×4 | Pure pattern, no literals |
 | `_fix_transient` | exam ×7 | Pure pattern |
 | `_fix_enum` | exam ×4 | Pure pattern; conditional logic keeps it as reviewed code |
@@ -172,7 +173,8 @@ package, split by the defect each one fixes:
 | `rules/initialisms.py` | `SHA`, `uvx`, `TODO`, `FIXME`, `Invalid JSON`, `JSON`, `YAML` | 7 |
 | `rules/filenames.py` | `lockfile`, the dotted-config literals, `_spell_out_dotfiles`, `_spell_out_dotted_names` | 4 + regexes |
 | `rules/identifiers.py` | `KEY=value`, the `*_id` family, `isRetryable`, `isError` | 7 |
-| `rules/prose.py` | `past-you` family, `hijacked`, plus the heteronym and emphasis regexes | 5 + regexes |
+| `rules/prose.py` | `past-you` family, `hijacked`, `delegates` | 5 |
+| `rules/passes.py` | pattern passes needing real Python: `_fix_retryable`, `_fix_transient`, `_fix_enum`, `_fix_copied`, the verb-stress heteronyms | 5 passes |
 | `rules/versions.py` | `4.28.1`, `4.x`, `^4.0` — all leaving for tier 1 anyway | 3 → 0 |
 
 (`TTL` and `XSS` appear in no module — they leave for tier 3b.)
