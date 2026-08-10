@@ -35,7 +35,7 @@ LITERALS: list[tuple[str, str]] = [
     # spelling it J-S-O-N. Force the spoken pronunciation via IPA. (Plain
     # "Jason" gets close but renders the final 'n' as a softer schwa+n.)
     ("JSON", "[JSON](/ʤˈeɪsˌɑn/)"),
-    # "transient" — see _fix_transient in rules/prose.py for the regex form
+    # "transient" — see `fix_transient` in rules/passes.py for the regex form
     # (needed so capitalised "Transient" in headings / table cells gets the
     # same treatment).
     # "YAML" reads as letters; the convention is "YAM-uhl".

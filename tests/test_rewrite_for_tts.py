@@ -29,6 +29,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 sys.argv = ["pytest"]
 
 import narraoke as h  # noqa: E402
+from rules import passes  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -139,11 +140,11 @@ def test_regex_rules_do_not_double_wrap_ipa() -> None:
     was never designed to have.
     """
     for fn, sample in [
-        (h._fix_retryable, "A retryable error occurred."),
-        (h._fix_transient, "A transient failure occurred."),
-        (h._fix_enum, "The enum value is set."),
-        (h._fix_copied, "The file was copied."),
-        (h._force_verb_stress_heteronyms, "The delegates delegate work."),
+        (passes.fix_retryable, "A retryable error occurred."),
+        (passes.fix_transient, "A transient failure occurred."),
+        (passes.fix_enum, "The enum value is set."),
+        (passes.fix_copied, "The file was copied."),
+        (passes.force_verb_stress_heteronyms, "The delegates delegate work."),
     ]:
         once = fn(sample)
         twice = fn(once)

@@ -628,9 +628,9 @@ def _expand_numeric_ranges(text: str) -> str:
     return re.sub(r"(\d+)\s*[-–—]\s*(\d+)", r"\1 to \2", text)
 
 
-# Moved to `rules/passes.py` (registered as the "verb-stress-heteronyms"
-# pass). The alias keeps the established private name working.
-_force_verb_stress_heteronyms = rules.passes.force_verb_stress_heteronyms
+# The verb-stress-heteronyms pass moved to `rules/passes.py`, registered under
+# that name in `ORDERED_PASSES`. `rewrite_for_tts` runs it by stage via
+# `rules.apply_passes(..., "emphasis")`, so nothing here names it directly.
 
 
 # Generic literal-phrase overrides — apply to ANY narrated markdown doc.
@@ -1011,12 +1011,8 @@ def _spell_out_vs(text: str) -> str:
 
 # The word-level IPA passes formerly defined here now live in
 # `rules/passes.py`, registered in `passes.ORDERED_PASSES` and applied by
-# stage. These aliases keep the established private names working for callers
-# and tests; the behaviour is identical.
-_fix_enum = rules.passes.fix_enum
-_fix_transient = rules.passes.fix_transient
-_fix_copied = rules.passes.fix_copied
-_fix_retryable = rules.passes.fix_retryable
+# stage. `rewrite_for_tts` runs them via `rules.apply_passes(..., "word_ipa")`;
+# no rule is named individually here, so adding one never touches this file.
 
 
 def _apply_literal_overrides(text: str) -> str:

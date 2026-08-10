@@ -120,14 +120,24 @@ def test_apply_passes_composes_every_pass_in_the_stage() -> None:
         assert fragment in out
 
 
-def test_moved_passes_keep_their_narraoke_aliases() -> None:
-    """The private names are referenced by existing tests and callers; the
-    move must not silently break them."""
-    assert h._fix_copied is passes.fix_copied
-    assert h._fix_transient is passes.fix_transient
-    assert h._fix_enum is passes.fix_enum
-    assert h._fix_retryable is passes.fix_retryable
-    assert h._force_verb_stress_heteronyms is passes.force_verb_stress_heteronyms
+def test_narraoke_names_no_individual_pass() -> None:
+    """The moved passes are reached only by stage, never by name.
+
+    `narraoke.py` used to carry a `_fix_*` alias per moved function. Those were
+    vestigial migration scaffolding; the decoupling is only real if the module
+    names none of them. Adding a pass must stay a registration in
+    `rules/passes.py`, not an edit here."""
+    for name in (
+        "_fix_copied",
+        "_fix_transient",
+        "_fix_enum",
+        "_fix_retryable",
+        "_force_verb_stress_heteronyms",
+    ):
+        assert not hasattr(h, name), (
+            f"{name} is back in narraoke.py — passes must be reached by stage "
+            f"via rules.apply_passes, not named individually"
+        )
 
 
 def test_passes_module_carries_no_literals() -> None:
