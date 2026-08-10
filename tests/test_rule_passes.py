@@ -39,14 +39,16 @@ def test_passes_run_in_declared_order() -> None:
 def test_definition_order_is_not_application_order() -> None:
     """The registry, not the source layout, decides when a pass runs.
 
-    `fix_copied` is defined first in the module but registered last among the
-    word_ipa passes. If this ever coincides, the test has stopped proving
-    anything and the registration list should be re-checked.
+    `fix_copied` is defined first in the module but is not registered first
+    among the word_ipa passes. If it ever becomes first in registration too,
+    the test has stopped proving anything and the registration list should be
+    re-checked.
     """
     word_ipa = [p.name for p in passes.passes_for("word_ipa")]
-    assert word_ipa[-1] == "copied", (
-        "copied is defined first but registered last; if that changed, this "
-        "test no longer demonstrates that the two orders are independent"
+    assert word_ipa[0] != "copied", (
+        "copied is defined first but must not be registered first; if that "
+        "changed, this test no longer demonstrates that the two orders are "
+        "independent"
     )
 
 
@@ -118,6 +120,19 @@ def test_apply_passes_composes_every_pass_in_the_stage() -> None:
     out = rules.apply_passes("A transient enum was copied.", "word_ipa")
     for fragment in ("tɹˈænziənt", "ˈinʌm", "kˈɑpid"):
         assert fragment in out
+
+
+def test_at_symbol_is_spoken_as_at_in_both_shapes() -> None:
+    """The two requested shapes become the word "at"; one-sided is left alone."""
+    # whitespace on both sides
+    assert rules.apply_passes("a @ b", "word_ipa") == "a at b"
+    assert rules.apply_passes("a  @  b", "word_ipa") == "a at b"
+    # non-whitespace on both sides
+    assert rules.apply_passes("user@host", "word_ipa") == "user at host"
+    assert rules.apply_passes("a@b@c", "word_ipa") == "a at b at c"
+    # one-sided: not one of the requested shapes, so untouched
+    assert rules.apply_passes("a@ b", "word_ipa") == "a@ b"
+    assert rules.apply_passes("a @b", "word_ipa") == "a @b"
 
 
 def test_narraoke_names_no_individual_pass() -> None:

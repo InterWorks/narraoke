@@ -146,6 +146,29 @@ def fix_retryable(text: str) -> str:
     )
 
 
+def say_at_symbol(text: str) -> str:
+    """Speak "@" as the word "at" in the two unambiguous positions.
+
+    Kokoro voices a bare "@" inconsistently — often skipping it — so it is
+    forced to the word "at" here. Only the two shapes the symbol reliably
+    *means* "at" are rewritten:
+
+      * surrounded by whitespace  ``a @ b``  → ``a at b``
+      * flanked by non-whitespace ``a@b``    → ``a at b``  (e.g. a handle or
+        an ``user@host``)
+
+    A one-sided ``@`` (``a@ b`` or ``a @b``) is left alone: it is neither of
+    the requested shapes and is more likely a typo or markup artefact than a
+    spoken "at".
+
+    Whitespace collapses to a single space so ``a  @  b`` does not leave a
+    double space. The two-sided-text case inserts spaces so the surrounding
+    words stay separate tokens for the phonemizer.
+    """
+    text = re.sub(r"\s+@\s+", " at ", text)
+    return re.sub(r"(?<=\S)@(?=\S)", " at ", text)
+
+
 # Heteronyms Kokoro stresses as a noun by default but which read as a verb.
 # Capitalisation (or following a colon/heading lead-in) biases the noun
 # reading; mid-sentence lowercase "records" already renders correctly. Use
@@ -210,6 +233,12 @@ ORDERED_PASSES: tuple[Pass, ...] = (
         fn=fix_copied,
         stage="word_ipa",
         why='Kokoro splits "-ied", giving "cop-ih-ed"',
+    ),
+    Pass(
+        name="at-symbol",
+        fn=say_at_symbol,
+        stage="word_ipa",
+        why='Kokoro voices a bare "@" inconsistently, often skipping it',
     ),
     # Runs in `emphasis` because it must see the text *after* quote and paren
     # wrapping: those passes insert punctuation that its sentence-start and
