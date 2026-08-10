@@ -985,14 +985,24 @@ def _apply_doc_named_pronunciations(text: str) -> str:
     For each entry, replace the bare CamelCase/literal form of the name with
     misaki's IPA-escape `[Name](/ipa/)` syntax. Matches the same word-boundary
     rule used by the original company-name rewrite: not preceded by a letter,
-    slash, dot, or @, and not followed by letters or `/`.
+    slash, dot, `@`, or `[`, and not followed by letters or `/`.
+
+    The `[` in the lookbehind is load-bearing for possessive forms. A rule for
+    the possessive `"InterWorks'"` (placed, correctly, before the base
+    `"InterWorks"`) rewrites to `[InterWorks'](/…ɪz/)`. Without the `[` guard,
+    the base rule then matches the `InterWorks` *inside* that escape — its
+    trailing `'` is not in the `(?![A-Za-z./])` exclusion — and re-wraps it,
+    producing the nested `[[InterWorks](/…/)'](/…ɪz/)` that misaki cannot
+    parse. The possessive `/ɪz/` syllable is then dropped and you hear
+    "inter-works" with a dangling apostrophe. Excluding a preceding `[` keeps
+    the base rule from reaching into an already-substituted longer name.
     """
     for name, ipa, _hint in _DOC_NAMED_IPA:
         if not ipa:
             continue
         replacement = f"[{name}]({ipa})"
         pattern = re.compile(
-            rf"(?<![A-Za-z/.@]){re.escape(name)}(?![A-Za-z./])"
+            rf"(?<![A-Za-z/.@\[]){re.escape(name)}(?![A-Za-z./])"
         )
         text = pattern.sub(replacement, text)
     return text
