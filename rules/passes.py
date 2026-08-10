@@ -80,16 +80,23 @@ class Pass:
 
 
 def fix_copied(text: str) -> str:
-    """Wrap "copied" so Kokoro reads "COP-eed", not "cop-ih-ed".
+    """Wrap "copied" so Kokoro reads the two-syllable "COP-eed", not
+    "cop-ih-ed".
 
     Kokoro splits the "-ied" suffix into a spurious extra syllable. The word
     boundary is load-bearing rather than stylistic: misaki phonemizes a
     mid-word escape to nothing, so a bare-substring version of this rule
     turns "uncopied" into "un[copied](/…/)" and loses the word entirely.
-    Prefixed forms are left to Kokoro, which reads them correctly.
+    Prefixed forms are left to Kokoro, which reads them correctly; a hyphen
+    is a word boundary, so the real word inside "hand-copied" still fires.
+
+    The vowel is /ɑ/, not /ɒ/. Both phonemize cleanly, so this is not caught
+    by a smoke test — but the pipeline runs misaki with `british=False`, and
+    /ɒ/ is the British vowel. It would put one subtly British word in an
+    otherwise American voice.
     """
     pat = re.compile(r"\b(copied)\b(?!\]\(/)", re.IGNORECASE)
-    return pat.sub(r"[\1](/kˈɒpid/)", text)
+    return pat.sub(r"[\1](/kˈɑpid/)", text)
 
 
 def fix_transient(text: str) -> str:

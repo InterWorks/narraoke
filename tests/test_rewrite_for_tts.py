@@ -156,7 +156,19 @@ def test_regex_rules_do_not_double_wrap_ipa() -> None:
 def test_copied_gets_a_single_final_syllable() -> None:
     """Kokoro splits "-ied" into "cop-ih-ed"; the escape forces "COP-eed"."""
     out = h.rewrite_for_tts("The file was copied to the cache.")
-    assert "[copied](/kˈɒpid/)" in out
+    assert "[copied](/kˈɑpid/)" in out
+
+
+def test_copied_uses_the_american_vowel() -> None:
+    """/ɑ/, not /ɒ/.
+
+    Both phonemize cleanly, so no smoke test distinguishes them — but the
+    pipeline runs misaki with `british=False`, and /ɒ/ is the British vowel.
+    Shipping it would put one subtly British word in an American voice.
+    """
+    out = h.rewrite_for_tts("copied")
+    assert "kˈɑpid" in out
+    assert "ɒ" not in out
 
 
 def test_copied_is_word_bounded_so_prefixed_forms_survive() -> None:
@@ -167,8 +179,14 @@ def test_copied_is_word_bounded_so_prefixed_forms_survive() -> None:
     literal form silently destroyed the word instead of fixing it. Kokoro
     reads the prefixed forms correctly on its own, so they are left alone.
     """
-    for word in ("uncopied", "recopied"):
+    for word in ("uncopied", "recopied", "photocopied"):
         assert h.rewrite_for_tts(word) == word
+
+
+def test_copied_fires_across_a_hyphen() -> None:
+    """A hyphen is a word boundary, so the real word inside "hand-copied"
+    is a genuine occurrence and must still be fixed."""
+    assert "kˈɑpid" in h.rewrite_for_tts("hand-copied notes")
 
 
 def test_copied_does_not_touch_other_inflections() -> None:

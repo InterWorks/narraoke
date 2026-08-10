@@ -116,7 +116,7 @@ def test_the_registry_is_exported_from_the_package() -> None:
 def test_apply_passes_composes_every_pass_in_the_stage() -> None:
     """An end-to-end check that registration actually wires a pass in."""
     out = rules.apply_passes("A transient enum was copied.", "word_ipa")
-    for fragment in ("tɹˈænziənt", "ˈinʌm", "kˈɒpid"):
+    for fragment in ("tɹˈænziənt", "ˈinʌm", "kˈɑpid"):
         assert fragment in out
 
 
