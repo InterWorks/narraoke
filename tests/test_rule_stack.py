@@ -150,6 +150,49 @@ def test_identical_names_in_two_tiers_are_not_a_conflict() -> None:
     assert stack.conflicting_names() == []
 
 
+# ── possessive named pronunciations ──────────────────────────────────────────
+
+def _apply_named(stack: RuleStack, text: str) -> str:
+    previous = h.active_rule_stack()
+    try:
+        h.set_rule_stack(stack)
+        return h._apply_doc_named_pronunciations(text)
+    finally:
+        h.set_rule_stack(previous)
+
+
+def test_possessive_named_pronunciation_is_not_reprocessed_by_the_base() -> None:
+    """A possessive rule placed before its base must survive the base pass.
+
+    `"InterWorks'"` → /…ɪz/ rewrites to `[InterWorks'](/…ɪz/)`. The base
+    `"InterWorks"` rule then sees the `InterWorks` *inside* that escape — its
+    trailing `'` is outside the base's `(?![A-Za-z./])` exclusion — and, before
+    the fix, re-wrapped it into a nested `[[InterWorks](/…/)'](/…ɪz/)` that
+    misaki cannot parse, dropping the possessive syllable. The `[` guard in the
+    lookbehind stops the base from reaching into an already-substituted name.
+    """
+    stack = RuleStack(
+        company=RuleSet(
+            tier="company",
+            # order is semantics: possessive before base (longer first)
+            named=(
+                NamedPronunciation(
+                    name="InterWorks'", ipa="/ˈɪntɚˌwɜɹksɪz/", origin="company"
+                ),
+                NamedPronunciation(
+                    name="InterWorks", ipa="/ˈɪntɚˌwɜɹks/", origin="company"
+                ),
+            ),
+        ),
+    )
+    out = _apply_named(stack, "InterWorks' platform runs on InterWorks itself.")
+    # possessive wrapped once, with its /ɪz/ intact and no nesting
+    assert "[InterWorks'](/ˈɪntɚˌwɜɹksɪz/)" in out
+    assert "[[InterWorks]" not in out
+    # the standalone base name still gets wrapped
+    assert "[InterWorks](/ˈɪntɚˌwɜɹks/)" in out
+
+
 # ── lint ─────────────────────────────────────────────────────────────────────
 
 def test_lint_flags_a_shadowed_rule() -> None:
