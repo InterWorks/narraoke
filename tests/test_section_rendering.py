@@ -4,6 +4,13 @@ These cover the argument parsing and worker-count logic. The encode itself is
 verified by rendering: sections produced concurrently are pixel-identical to
 the sequential ones (mse 0.00 / psnr inf on every frame), with only NVENC
 rate-control nondeterminism showing up as a few bytes of file-size difference.
+
+The frame-grouping tests below guard the audio/video sync invariant that the
+encode relies on: every one of a phrase's frames (a summary's main hold PLUS
+its dwell scroll/hold sub-frames) must reach the section concat. Dropping the
+sub-frames made every per-section MP4 shorter than its audio and left the
+highlight running ahead of the narration after each table/code block — a bug
+that only showed up in the rendered video, never in the arg-parsing tests.
 """
 from __future__ import annotations
 
@@ -17,6 +24,73 @@ sys.path.insert(0, str(_REPO_ROOT))
 sys.argv = ["pytest"]
 
 import narraoke as h  # noqa: E402
+
+
+# ── frame grouping: sub-frames must survive ──────────────────────────────────
+
+def _kf(name: str, dur: float) -> tuple[Path, float]:
+    return (Path("/frames") / name, dur)
+
+
+def test_grouping_keeps_a_plain_frame() -> None:
+    grouped = h._group_frames_by_phrase([_kf("frame_00003.png", 2.0)])
+    assert grouped == {3: [(Path("/frames/frame_00003.png"), 2.0)]}
+
+
+def test_grouping_keeps_dwell_subframes_with_their_phrase() -> None:
+    """The exact regression: `_001`/`_002` sub-frames belong to phrase 74.
+
+    A regex of `frame_(\\d+)\\.png$` matches the main frame but silently drops
+    the sub-frames, so this is the assertion that would have caught the bug.
+    """
+    grouped = h._group_frames_by_phrase([
+        _kf("frame_00074.png", 3.14),
+        _kf("frame_00074_001.png", 3.63),
+    ])
+    assert 74 in grouped
+    assert grouped[74] == [
+        (Path("/frames/frame_00074.png"), 3.14),
+        (Path("/frames/frame_00074_001.png"), 3.63),
+    ]
+
+
+def test_grouping_orders_main_before_subframes_regardless_of_input_order() -> None:
+    grouped = h._group_frames_by_phrase([
+        _kf("frame_00010_002.png", 0.5),
+        _kf("frame_00010.png", 1.0),
+        _kf("frame_00010_001.png", 0.5),
+    ])
+    assert [p.name for p, _ in grouped[10]] == [
+        "frame_00010.png",
+        "frame_00010_001.png",
+        "frame_00010_002.png",
+    ]
+
+
+def test_grouped_duration_equals_flat_keyframe_duration() -> None:
+    """Section A/V sync invariant: grouping must neither drop nor duplicate
+    time. The sum of every grouped frame's duration equals the sum of the
+    input keyframes' durations — so a section's video track stays as long as
+    the audio slice it is muxed against."""
+    keyframes = [
+        _kf("frame_00000.png", 1.9),
+        _kf("frame_00001.png", 2.0),
+        _kf("frame_00074.png", 3.14),
+        _kf("frame_00074_001.png", 3.63),   # dwell hold — must be counted
+        _kf("frame_00075.png", 2.04),
+    ]
+    grouped = h._group_frames_by_phrase(keyframes)
+    grouped_total = sum(d for frames in grouped.values() for _, d in frames)
+    assert grouped_total == pytest.approx(sum(d for _, d in keyframes))
+
+
+def test_grouping_ignores_unrecognised_names() -> None:
+    grouped = h._group_frames_by_phrase([
+        _kf("frame_00001.png", 1.0),
+        _kf("title_card.png", 5.0),
+        _kf("intro.png", 2.0),
+    ])
+    assert set(grouped) == {1}
 
 
 # ── --sections parsing ───────────────────────────────────────────────────────
