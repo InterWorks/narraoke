@@ -1999,6 +1999,7 @@ _HTML_FOOTER = """
       const out = spans.map(function (s) {
         const r = s.getBoundingClientRect();
         const top = r.top + window.scrollY;
+        const cs = getComputedStyle(s);
         return {
           id: s.id,
           top: Math.round(top),
@@ -2006,7 +2007,12 @@ _HTML_FOOTER = """
           // For multi-line phrases, the bounding rect height is the full block
           // height. We want the *first line's* y-center; fall back to a
           // sensible default if line-height isn't available.
-          line: Math.round(parseFloat(getComputedStyle(s).lineHeight) || r.height)
+          line: Math.round(parseFloat(cs.lineHeight) || r.height),
+          // Font size, so the compositor can subtract the inline half-leading:
+          // getBoundingClientRect().top is the top of the *line box*, which for
+          // line-height > 1 sits (line - fontSize)/2 above the glyphs. Without
+          // this the highlight rect rides half a line high.
+          font: Math.round(parseFloat(cs.fontSize) || 0)
         };
       });
       const narrPre = document.getElementById('narr-coords');
@@ -2550,6 +2556,68 @@ def _capture_sliced(
 # 4. FRAME COMPOSITION
 # ────────────────────────────────────────────────────────────────────────────────
 
+# Highlight box: horizontal padding and the ink-detection luminance threshold.
+HIGHLIGHT_PAD = 6            # equal px padding above/below the glyph extent
+HIGHLIGHT_INK_THRESHOLD = 110  # a row is "inked" if its brightest px exceeds this
+
+
+def _fit_highlight_box(
+    frame_rgb,
+    nominal_top: int,
+    n_lines: int,
+    line_px: int,
+    font_px: int,
+    left: int,
+    right: int,
+    video_height: int,
+    pad: int = HIGHLIGHT_PAD,
+) -> tuple[int, int]:
+    """Return the (top, height) of the highlight rect, fitted to real glyph ink.
+
+    The captured span metrics (`top`, `height`) come from a different Chromium
+    pass than the screenshot and drift by up to ~a line, so they can't be
+    trusted for pixel geometry. `n_lines` (derived from `height`/`line`) tells
+    us HOW MANY lines the phrase spans; this function scans `frame_rgb` for the
+    glyph rows and fits the box to the real first-line top and last-line bottom,
+    with equal `pad` above and below. Capping at `n_lines` runs keeps an
+    unrelated following paragraph out of the box.
+
+    `frame_rgb` is an (H, W, 3) uint8-ish array of the already-cropped frame.
+    Falls back to a metrics-only box (nominal_top, one line-ish) when no ink is
+    found in the search band — e.g. a highlighted whitespace-only span.
+    """
+    import numpy as _np
+
+    first_center = nominal_top + font_px // 2
+    band_top = max(0, nominal_top - line_px)
+    band_bot = min(video_height, nominal_top + n_lines * line_px + line_px)
+    # Metrics-only fallback: a single em-box-tall rect at the nominal position.
+    fallback = (nominal_top, max(font_px, line_px))
+    if band_bot <= band_top:
+        return fallback
+
+    band = _np.asarray(frame_rgb)[band_top:band_bot, left:right, :3]
+    inked = band.mean(axis=2).max(axis=1) > HIGHLIGHT_INK_THRESHOLD
+    rows = _np.where(inked)[0]
+    if not rows.size:
+        return fallback
+
+    # Split inked rows into contiguous runs (gaps > 3px separate lines).
+    abs_rows = rows + band_top
+    splits = _np.where(_np.diff(abs_rows) > 3)[0]
+    groups = _np.split(abs_rows, splits + 1)
+    # Anchor on the ink run nearest the expected first line, then take that run
+    # plus the next (n_lines-1) below it.
+    start = min(
+        range(len(groups)),
+        key=lambda gi: abs((groups[gi][0] + groups[gi][-1]) / 2.0 - first_center),
+    )
+    kept = groups[start:start + n_lines]
+    ink_top = int(kept[0][0])
+    ink_bot = int(kept[-1][-1])
+    return (ink_top - pad, (ink_bot - ink_top) + 2 * pad)
+
+
 def build_keyframes(
     screenshot_path: Path,
     coords: list[dict],
@@ -2700,10 +2768,16 @@ def build_keyframes(
         draw_highlight = True
 
         phrase_top = c["top"]
+        # getBoundingClientRect().top is the top of the inline *line box*. With
+        # line-height > 1 the glyphs sit (line - font)/2 below that, so the
+        # visible text — and the highlight — must be shifted down by that
+        # half-leading. Older captures without a font metric fall back to 0.
+        half_leading = max(0, (c["line"] - c.get("font", c["line"])) // 2)
+        glyph_top = phrase_top + half_leading
         # We want the *middle* of the first line at target_y. For multi-line
         # phrases, the bounding rect height covers all lines; we approximate
-        # the first line center as phrase_top + line/2.
-        first_line_center = phrase_top + int(c["line"] * 0.5)
+        # the first line center as glyph_top + font/2.
+        first_line_center = glyph_top + int(c.get("font", c["line"]) * 0.5)
         scroll_y = first_line_center - target_y
         scroll_y = max(0, min(scroll_y, max_scroll))
 
@@ -2712,20 +2786,29 @@ def build_keyframes(
         frame = page.crop(crop_box).copy()
 
         if draw_highlight:
-            phrase_top = c["top"]
-            phrase_h = max(c["height"], int(c["line"]))
-            highlight_top = phrase_top - scroll_y
-            highlight_h = max(phrase_h, int(c["line"]))
+            # Content column (the .page is centered, max-width 920px, padding
+            # 3rem ≈ 48px). Pad in from the text edge a little.
+            left = (VIDEO_WIDTH - 920) // 2 + 32
+            right = VIDEO_WIDTH - left
+
+            # Nominal (metrics-derived) first-line top, and the line count the
+            # phrase spans. _fit_highlight_box refines the position/size against
+            # the real glyph ink — the metrics only seed the search.
+            nominal_top = glyph_top - scroll_y
+            line_px = int(c.get("line", c.get("font", 22)))
+            font_px = int(c.get("font", c["line"]))
+            n_lines = max(1, int(round(c["height"] / line_px)))
+            highlight_top, highlight_h = _fit_highlight_box(
+                frame, nominal_top, n_lines, line_px, font_px,
+                left, right, VIDEO_HEIGHT,
+            )
+
             if 0 <= highlight_top + highlight_h and highlight_top < VIDEO_HEIGHT:
                 overlay = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
                 from PIL import ImageDraw
                 draw = ImageDraw.Draw(overlay)
-                # Pad highlight horizontally to match the page's content column
-                # (the .page is centered, max-width 920px, padding 3rem ≈ 48px).
-                left = (VIDEO_WIDTH - 920) // 2 + 32
-                right = VIDEO_WIDTH - left
-                top = max(0, highlight_top - 4)
-                bot = min(VIDEO_HEIGHT, highlight_top + highlight_h + 4)
+                top = max(0, highlight_top)
+                bot = min(VIDEO_HEIGHT, highlight_top + highlight_h)
                 draw.rectangle(
                     [(left, top), (right, bot)],
                     fill=(210, 153, 34, 70),  # subtle warm yellow, low alpha
@@ -3198,6 +3281,32 @@ def _default_section_workers() -> int:
     return min(4, max(1, (os.cpu_count() or 4) // 2))
 
 
+def _group_frames_by_phrase(
+    keyframes: list[tuple[Path, float]],
+) -> dict[int, list[tuple[Path, float]]]:
+    """Group keyframes by phrase index, keeping ALL of a phrase's frames.
+
+    A code/table summary emits a main frame (`frame_00074.png`) plus dwell
+    scroll/hold sub-frames (`frame_00074_001.png`, `_002`, …). Every one of
+    them must reach the per-section concat, in order — if the sub-frames are
+    dropped, the section video is that many seconds shorter than its audio and
+    the highlight runs ahead of the narration after the block. Returns each
+    index -> ordered [(path, dur), …] with the main frame (sub -1) first, then
+    sub-frames ascending. Frames whose name doesn't match are ignored.
+    """
+    grouped: dict[int, list[tuple[int, Path, float]]] = {}
+    for path, dur in keyframes:
+        m = re.match(r"frame_(\d+)(?:_(\d+))?\.png$", path.name)
+        if m:
+            idx = int(m.group(1))
+            sub = int(m.group(2)) if m.group(2) is not None else -1
+            grouped.setdefault(idx, []).append((sub, path, dur))
+    return {
+        idx: [(p, d) for _sub, p, d in sorted(items)]
+        for idx, items in grouped.items()
+    }
+
+
 def render_section_videos(
     annotated_blocks: list[dict],
     segments,
@@ -3240,11 +3349,14 @@ def render_section_videos(
 
     # Look up frames by phrase index. Some segments may have been skipped if
     # they had no DOM coords, so build a dict rather than a list.
-    frame_by_index: dict[int, tuple[Path, float]] = {}
-    for path, dur in keyframes:
-        m = re.match(r"frame_(\d+)\.png$", path.name)
-        if m:
-            frame_by_index[int(m.group(1))] = (path, dur)
+    #
+    # A phrase can own MORE than one frame: a code/table summary emits a main
+    # frame (`frame_00074.png`, the narration hold) plus dwell scroll/hold
+    # sub-frames (`frame_00074_001.png`, `_002`, …). ALL of them must go into
+    # the per-section concat in order — dropping the sub-frames (the dwell)
+    # leaves the section video that many seconds shorter than its audio, so
+    # the highlight runs ahead of the narration after every table/code block.
+    frame_by_index = _group_frames_by_phrase(keyframes)
 
     doc_title = _doc_title(annotated_blocks, title_override)
 
@@ -3421,18 +3533,21 @@ def render_section_videos(
         concat_lines.append(f"file '{plan['card_path'].resolve()}'")
         concat_lines.append(f"duration {card_hold:.4f}")
 
+        # Flatten every in-range phrase's frame(s) — main plus any dwell
+        # sub-frames — into one ordered list of (path, dur).
         in_range_frames = [
-            (i_idx, frame_by_index[i_idx])
+            frame
             for i_idx in range(plan["start_phrase"], plan["end_phrase_exclusive"])
             if i_idx in frame_by_index
+            for frame in frame_by_index[i_idx]
         ]
         if not in_range_frames:
             warn(f"  [{idx+1}/{len(plans)}] no in-range frames; skipping")
             section_audio.unlink(missing_ok=True)
             return None
 
-        content_dur = sum(d for _, (_, d) in in_range_frames)
-        for _, (fpath, dur) in in_range_frames:
+        content_dur = sum(d for _, d in in_range_frames)
+        for fpath, dur in in_range_frames:
             concat_lines.append(f"file '{fpath.resolve()}'")
             concat_lines.append(f"duration {dur:.4f}")
         # Tail-out: hold the last frame long enough that the VIDEO track is
@@ -3452,9 +3567,9 @@ def render_section_videos(
         tail_hold = TAIL_OUT_SECONDS
         if audio_dur:
             tail_hold = max(TAIL_OUT_SECONDS, audio_dur - (card_hold + content_dur) + 0.5)
-        concat_lines.append(f"file '{in_range_frames[-1][1][0].resolve()}'")
+        concat_lines.append(f"file '{in_range_frames[-1][0].resolve()}'")
         concat_lines.append(f"duration {tail_hold:.4f}")
-        concat_lines.append(f"file '{in_range_frames[-1][1][0].resolve()}'")
+        concat_lines.append(f"file '{in_range_frames[-1][0].resolve()}'")
 
         concat_path = output_dir / f".section_{idx:02d}_concat.txt"
         concat_path.write_text("\n".join(concat_lines), encoding="utf-8")
@@ -3786,6 +3901,66 @@ def _compute_summary_dwell(
     return silence_after_chunk, dwell_by_phrase
 
 
+def _load_effective_silence(
+    output_dir: Path,
+    slug: str,
+    silence_after_chunk: list[float] | None,
+    n_chunks: int,
+) -> list[float]:
+    """Load the per-chunk effective-silence list written by synthesise_article.
+
+    Falls back to the requested `silence_after_chunk` if the file is missing
+    (older audio caches predate it) so behaviour degrades to the pre-fix path
+    rather than crashing.
+    """
+    import json as _json
+    path = output_dir / f"{slug}_effective_silence.json"
+    if path.is_file():
+        try:
+            data = _json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, list) and len(data) == n_chunks:
+                return [float(x or 0.0) for x in data]
+            warn(
+                f"  effective-silence count ({len(data) if isinstance(data, list) else '?'}) "
+                f"!= chunk count ({n_chunks}); falling back to requested dwell"
+            )
+        except Exception as e:  # noqa: BLE001 — degrade, don't crash a render
+            warn(f"  Could not read effective-silence file: {e}")
+    return list(silence_after_chunk) if silence_after_chunk else [0.0] * n_chunks
+
+
+def _redistribute_dwell(
+    dwell_by_phrase: dict[int, float],
+    structured_chunks: list[dict],
+    silence_after_chunk: list[float] | None,
+    effective_silence: list[float],
+) -> dict[int, float]:
+    """Grow each summary chunk's per-phrase dwell by the natural-tail slack.
+
+    `dwell_by_phrase` was built from the *requested* dwell. The real quiet gap
+    is `effective_silence` (natural tail + dwell), so the block-hold / scroll
+    frames must cover that extra tail too, otherwise the frame timeline hands
+    the tail's worth of time to the next phrase's highlight while the audio is
+    still silent. We add only the difference (tail = effective - requested) to
+    the phrase that already owns the chunk's dwell.
+    """
+    if not effective_silence:
+        return dwell_by_phrase
+    requested = silence_after_chunk or [0.0] * len(structured_chunks)
+    updated = dict(dwell_by_phrase)
+    for i, chunk in enumerate(structured_chunks):
+        indices = chunk.get("phrase_indices", [])
+        if not indices:
+            continue
+        last = indices[-1]
+        if last not in updated:
+            continue  # not a dwell-bearing chunk
+        tail = max(0.0, float(effective_silence[i]) - float(requested[i] or 0.0))
+        if tail > 0.0:
+            updated[last] = updated[last] + tail
+    return updated
+
+
 def main() -> None:
     args = build_parser().parse_args()
 
@@ -3919,6 +4094,24 @@ def main() -> None:
         silence_after_chunk=silence_after_chunk,
     )
 
+    # The *effective* silence after each chunk is the natural tail Kokoro
+    # appends to the speech PLUS the dwell we splice — the real quiet gap
+    # before the next chunk starts speaking. synthesise_article measured it
+    # from the spoken audio and persisted it beside the durations (so it
+    # survives --skip-tts). Use it, not the requested dwell, everywhere the
+    # timeline reasons about "when does the next phrase's audio begin": with
+    # the requested dwell alone the last summary phrase's highlight would run
+    # ~1s past the speech and the after-block phrase would start early.
+    effective_silence = _load_effective_silence(
+        output_dir, slug, silence_after_chunk, len(structured_chunks)
+    )
+
+    # Rebuild the per-phrase dwell frame budget from the measured gap so the
+    # block-hold / scroll-pan covers the full silence, not just the splice.
+    dwell_by_phrase = _redistribute_dwell(
+        dwell_by_phrase, structured_chunks, silence_after_chunk, effective_silence
+    )
+
     # ── 5. Timing data ────────────────────────────────────────────────────────
     step("Generating timing data …")
     from timing import generate_timings
@@ -3929,14 +4122,15 @@ def main() -> None:
             f"Chunk-duration count ({len(chunk_durations)}) doesn't match "
             f"chunk count ({len(structured_chunks)}) — timing may drift."
         )
-    # silence_after_chunk[i] is the trailing dwell silence baked into chunk i.
-    # Pass it to timing.py so the dwell goes ONLY to the chunk's last phrase
-    # instead of being spread proportionally across all phrases.
+    # trailing_silence is the measured quiet gap after the chunk's last spoken
+    # word. Pass it to timing.py so the highlight ends where the speech ends
+    # and that time is credited to the last phrase (dwell), not spread as
+    # speech across the chunk.
     chunk_map = [
         {
             "phrase_indices": c["phrase_indices"],
             "duration": d,
-            "trailing_silence": silence_after_chunk[i] if silence_after_chunk else 0.0,
+            "trailing_silence": effective_silence[i] if effective_silence else 0.0,
         }
         for i, (c, d) in enumerate(zip(structured_chunks, chunk_durations))
     ]

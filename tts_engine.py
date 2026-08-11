@@ -381,6 +381,88 @@ def _wav_duration_seconds(wav_path: Path) -> float:
         return w.getnframes() / float(w.getframerate())
 
 
+def _wav_trailing_silence_seconds(wav_path: Path, thresh: float = 0.01) -> float:
+    """Return the length of near-silence at the END of a WAV, in seconds.
+
+    Kokoro appends a natural tail of quiet to every spoken chunk. When we then
+    splice a fixed dwell-silence after that chunk, the *effective* gap before
+    the next chunk is (natural tail + dwell), not just the dwell. The timing
+    model must know the full gap so the last summary phrase's highlight ends at
+    the true end of speech and the after-block phrase starts on its real audio
+    — otherwise the highlight rides ahead of the narration by the tail length.
+
+    Measured on the raw 16-bit PCM: find the last sample whose magnitude
+    exceeds `thresh` (fraction of full scale); everything after it is the tail.
+    """
+    with wave.open(str(wav_path), "rb") as w:
+        n_frames = w.getnframes()
+        framerate = float(w.getframerate())
+        sampwidth = w.getsampwidth()
+        nchannels = w.getnchannels()
+        raw = w.readframes(n_frames)
+    if n_frames == 0 or sampwidth != 2:
+        # Only 16-bit PCM is handled precisely; anything else -> assume no tail
+        # (the dwell splice still applies; we just don't over-correct).
+        return 0.0
+    import numpy as np
+    samples = np.frombuffer(raw, dtype="<i2")
+    if nchannels > 1:
+        samples = samples.reshape(-1, nchannels)
+        peak = np.abs(samples).max(axis=1)
+    else:
+        peak = np.abs(samples)
+    limit = thresh * 32768.0
+    loud = np.nonzero(peak > limit)[0]
+    if loud.size == 0:
+        return n_frames / framerate  # whole clip is silence
+    silent_frames = (len(peak) - 1) - int(loud[-1])
+    return silent_frames / framerate
+
+
+def _effective_silence_from_mp3(
+    mp3_path: Path,
+    durations: list[float],
+    silence_after_chunk: list[float],
+) -> list[float]:
+    """Reconstruct per-chunk effective silence from an already-merged MP3.
+
+    Used only on the --skip-tts path, where the individual chunk WAVs no
+    longer exist. `durations[i]` is the cached (audio + spliced-dwell) length
+    of chunk i, so the running sum gives each chunk's end offset in the
+    combined audio. For chunks that had a dwell spliced, measure the quiet
+    that ends at that boundary; for the rest, report 0.0 (their natural tail
+    is an ordinary inter-sentence pause, not a summary hold).
+    """
+    from pydub import AudioSegment, silence as _silence
+    audio = AudioSegment.from_file(str(mp3_path))
+    thresh = audio.dBFS - 16
+    eff: list[float] = []
+    cursor_ms = 0.0
+    for i, d in enumerate(durations):
+        end_ms = cursor_ms + d * 1000.0
+        dwell = float(silence_after_chunk[i] or 0.0) if i < len(silence_after_chunk) else 0.0
+        if dwell > 0.01:
+            # Scan a window ending at the boundary for the trailing silence
+            # run. Look back a little more than the spliced dwell so the
+            # natural tail is included.
+            win_start = max(0.0, end_ms - (dwell * 1000.0 + 2500.0))
+            window = audio[win_start:end_ms]
+            runs = _silence.detect_silence(
+                window, min_silence_len=400, silence_thresh=thresh
+            )
+            tail = 0.0
+            if runs:
+                s, e = runs[-1]
+                # Only count it if the silence run reaches the boundary.
+                if (len(window) - e) < 250:
+                    tail = (e - s) / 1000.0
+            eff.append(tail if tail > 0 else dwell)
+        else:
+            eff.append(0.0)
+        cursor_ms = end_ms
+    return eff
+
+
 def synthesise_article(
     chunks: list[str],
     voice: str,
@@ -419,6 +501,16 @@ def synthesise_article(
             import json as _json
             if durations_path.exists():
                 durations = _json.loads(durations_path.read_text(encoding="utf-8"))
+                # Ensure the effective-silence sidecar exists and matches the
+                # cached audio. On a --skip-tts run the per-chunk WAVs are gone,
+                # so measure the trailing quiet at each chunk boundary directly
+                # from the combined MP3 using the cached cumulative durations.
+                eff_path = output_dir / f"{slug}_effective_silence.json"
+                if not eff_path.exists() and silence_after_chunk is not None:
+                    eff = _effective_silence_from_mp3(
+                        mp3_path, durations, silence_after_chunk
+                    )
+                    eff_path.write_text(_json.dumps(eff), encoding="utf-8")
                 return mp3_path, durations
             # Fall back to a single bucket spanning the whole MP3 if we don't
             # have a cached durations file (older runs predate this feature).
@@ -458,9 +550,19 @@ def synthesise_article(
     # caller asked for trailing silence after a chunk. The reported chunk
     # duration becomes (audio + trailing silence) so the timing pipeline
     # gives that chunk's phrase(s) the right share of the timeline.
+    #
+    # effective_silence[i] is the FULL quiet gap after chunk i's last spoken
+    # word = the natural tail Kokoro appends to the speech PLUS the dwell we
+    # splice. The timing pipeline needs this (not the spliced dwell alone) so
+    # the summary phrase's highlight ends at the true end of speech; see
+    # _wav_trailing_silence_seconds.
+    effective_silence: list[float] = []
     if silence_after_chunk is None:
         merged_chunk_paths = list(chunk_paths)
         durations = list(audio_durations)
+        effective_silence = [
+            _wav_trailing_silence_seconds(p) for p in chunk_paths
+        ]
     else:
         # Use the first chunk's sample params as the silence template.
         with wave.open(str(chunk_paths[0]), "rb") as w0:
@@ -470,6 +572,7 @@ def synthesise_article(
         silences_inserted = 0
         for i, p in enumerate(chunk_paths):
             merged_chunk_paths.append(p)
+            natural_tail = _wav_trailing_silence_seconds(p)
             dwell = float(silence_after_chunk[i] or 0.0)
             if dwell > 0.01:
                 silent_path = output_dir / f"{slug}_silence_{i:04d}.wav"
@@ -477,13 +580,20 @@ def synthesise_article(
                 merged_chunk_paths.append(silent_path)
                 silences_inserted += 1
                 durations.append(audio_durations[i] + dwell)
+                effective_silence.append(natural_tail + dwell)
             else:
                 durations.append(audio_durations[i])
+                # No dwell splice: the natural tail is a normal inter-sentence
+                # pause, not a summary hold. Leave it as speech-share time
+                # (0 here) so ordinary phrases aren't retimed.
+                effective_silence.append(0.0)
         if silences_inserted:
             info(f"  Inserted {silences_inserted} dwell-silence segments into audio")
 
     import json as _json
     durations_path.write_text(_json.dumps(durations), encoding="utf-8")
+    effective_silence_path = output_dir / f"{slug}_effective_silence.json"
+    effective_silence_path.write_text(_json.dumps(effective_silence), encoding="utf-8")
 
     # ── Merge ────────────────────────────────────────────────────────────────
     step("Concatenating audio chunks …")
