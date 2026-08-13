@@ -4,7 +4,7 @@
 
 [tools]
 uv = "0.9.21"
-python = "3.10"
+python = "3.14.7"
 
 [env]
 # Prefer a real Chromium binary. `_chromium_bin` probes `chromium-browser`
