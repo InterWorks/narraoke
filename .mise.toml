@@ -3,7 +3,7 @@
 # Do not let mise manage Python packages.
 
 [tools]
-uv = "0.9.21"
+uv = "0.12.5"
 python = "3.10"
 
 [env]
